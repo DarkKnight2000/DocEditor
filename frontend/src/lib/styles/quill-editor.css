@@ -1,0 +1,44 @@
+@reference 'tailwindcss';
+@import './layout.css';
+
+.ql-editor {
+    @apply text-lg font-nunito;
+}
+
+.ql-toolbar
+{
+    @apply font-nunito select-none;
+}
+
+.ql-container.ql-snow, .ql-toolbar.ql-snow {
+    border: none;
+}
+
+.ql-editor.ql-blank::before {
+    @apply pl-10
+}
+
+.ql-toolbar.ql-snow .ql-picker-label {
+    @apply border-none text-center h-auto font-nunito;
+}
+
+.ql-snow .ql-size.ql-picker
+{
+    @apply w-30 text-center;
+}
+
+.ql-toolbar.ql-snow > * {
+    @apply mx-1
+}
+
+/* .ql-toolbar.ql-snow .ql-formats {
+    @apply border-gray-500 border-l px-5
+} */
+
+.ql-toolbar.ql-snow .ql-formats > * {
+    @apply mx-1
+}
+
+.ql-snow .ql-tooltip {
+    @apply font-nunito
+}

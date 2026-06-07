@@ -1,0 +1,16 @@
+name: DocEditor
+
+services:
+  frontend:
+    build: frontend
+    ports:
+      - "5173:5173"
+    develop:
+      watch:
+        - action: sync
+          path: ./frontend
+          target: /app/frontend
+          ignore:
+            - node_modules/
+        - action: rebuild
+          path: package.json
