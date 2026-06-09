@@ -1,5 +1,8 @@
 {
 	"files.associations": {
 		"*.css": "tailwindcss"
+	},
+	"workbench.editor.customLabels.patterns": {
+		"**/+*": "${dirname}/${filename}.${extname}"
 	}
 }

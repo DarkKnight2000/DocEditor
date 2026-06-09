@@ -42,6 +42,7 @@
         else result += date_obj.toDateString();
         return result;
     }
+
 </script>
 
 <div class="flex flex-col font-nunito items-center w-full">

@@ -33,11 +33,11 @@ async def root():
 
 SHARED_JWT_SECRET = os.environ['SHARED_JWT_SECRET']
 def get_internal_user(authorization: Annotated[str | None, Header()]):
-    print(authorization)
+    # print(authorization)
     try:
         token = authorization.removeprefix("Bearer ").strip()
         payload = jwt.decode(token, SHARED_JWT_SECRET, algorithms=['HS256'])
-        print(payload)
+        # print(payload)
         return payload['sub']
     except JWTError:
         raise HTTPException(status_code=401, detail='Invalid internal token')
@@ -88,7 +88,7 @@ active_docs: dict[int, DocSyncer] = {}
 @app.websocket("/edit-socket/{doc_id}")
 async def edit_socket(websocket: WebSocket, doc_id: str):
     
-    if not db_utils.check_doc_exists(db_handle, doc_id):
+    if not await db_utils.check_doc_exists(db_handle, doc_id):
         websocket.close("Document doesn't exist! Login and create a new document to start editing")
         return
     
@@ -117,7 +117,8 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
                 await websocket.send_json({
                     "type": MessageType.SERVER_INIT.value,
                     "rev": doc_info[1]['head']['rev_id'],
-                    "content": str(doc_info[1]['head']['delta'])})
+                    "content": doc_info[1]['head']['delta']
+                })
             elif data["type"] == MessageType.CLIENT_REV.value:
                 C = data["content"]
                 r_c = data["rev"]

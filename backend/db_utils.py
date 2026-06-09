@@ -28,6 +28,9 @@ async def _safe_shutdown(cluster: AsyncCluster):
 def get_current_timestamp():
     return datetime.now(UTC).astimezone().strftime(DATETIME_FORMAT)
 
+def parse_timestamp(ts_str: str)->datetime:
+    return datetime.strptime(ts_str, DATETIME_FORMAT)
+
 async def db_connect() -> DB_Handle:
 
     endpoint = os.environ['COUCHBASE_ENDPOINT']
@@ -79,6 +82,8 @@ async def get_user_docs(db_handle: DB_Handle, user_id: str):
         ret = []
         async for row in result.rows():
             ret.append(row)
+        ret.sort(key = lambda x: x['last_edit'], reverse=True)
+        
     except ParsingFailedException as ex:
         print('Failed parsing query string, Details: ', ex.error_context)
     return ret

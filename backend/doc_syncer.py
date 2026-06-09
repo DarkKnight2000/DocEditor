@@ -1,7 +1,8 @@
-from changeset import Delta, Op, INSERT, delta_from_list
+# from changeset import Delta, Op, INSERT, delta_from_list
 from enum import Enum
 from fastapi import WebSocket
 import db_utils
+import delta
 
 class MessageType(Enum):
     CLIENT_ID = 0   # To send client ID to server
@@ -16,11 +17,11 @@ Merge   - Two deltas to the same document
 Follow/Transform  - The delta required to compose with A, to make it into merge(A, B), or, "transform" B according A
 """
 
-class RevNode:
-    def __init__(self):
-        self.client_id = -1
-        self.rev_id = -1
-        self.changeset:Delta = None
+# class RevNode:
+#     def __init__(self):
+#         self.client_id = -1
+#         self.rev_id = -1
+#         self.changeset:Delta = None
 
 class DocSyncer:
     def __init__(self, doc_id: str):
@@ -39,8 +40,6 @@ class DocSyncer:
         
     async def add_revision(self, db_handle, client_id, rev_changes, reference_id):
         print(rev_changes)
-        # Convert from python dict to Delta object
-        rev_changes = delta_from_list(rev_changes)
         
         # Get data and CAS from database, update is successful if CAS matches before updating
         while True:
@@ -48,7 +47,7 @@ class DocSyncer:
             start_sync = False
             for record in content['history']:
                 if start_sync:
-                    rev_changes = delta_from_list(record).transform(rev_changes, True)
+                    rev_changes = delta.transform(record, rev_changes, True)
                 elif reference_id == record['rev_id']: # Found current client record, start syncing with future records
                     start_sync = True
             
@@ -66,7 +65,7 @@ class DocSyncer:
             })
             content['head'] = {
                 'rev_id': next_rev_id,
-                'delta': str(delta_from_list(content['head']['delta']).compose(rev_changes))
+                'delta': delta.compose(content['head']['delta'], rev_changes)
             }
             content['last_edit'] = edit_ts
             
@@ -78,7 +77,7 @@ class DocSyncer:
             if cl == client_id:
                 await sock.send_json({
                     "type": MessageType.SERVER_ACK.value,
-                    "rev": self.head_record_id
+                    "rev": next_rev_id
                 })
             else:
                 await sock.send_json({

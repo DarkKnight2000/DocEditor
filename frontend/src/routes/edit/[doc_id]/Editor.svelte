@@ -136,10 +136,10 @@
                     quill.updateContents(D, "api");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
                     // initial changes
-                    // console.log("server init", recv_data.content)
+                    console.log("server init", recv_data.content)
                     // console.log("server init", JSON.parse(recv_data.content))
                     ClientState.rev_id = recv_data.rev;
-                    ClientState.A = new Delta(JSON.parse(recv_data.content));
+                    ClientState.A = new Delta((recv_data.content));
                     // console.log(ClientState.A);
                     quill.setContents(ClientState.A);
                     sync_status = 'Saved !';
@@ -206,53 +206,16 @@
             <button class="ql-list" title="Clean button" value="ordered"></button>
             <button class="ql-list" title="Clean button" value="bullet"></button>
             <button class="ql-link" title="Clean button" value="bullet"></button>
-            <!-- <select class="ql-color">
-                <option selected></option>
-                <option value="#e60000"></option>
-                <option value="#ff9900"></option>
-                <option value="#ffff00"></option>
-                <option value="#008a00"></option>
-                <option value="#0066cc"></option>
-                <option value="#9933ff"></option>
-                <option value="#ffffff"></option>
-                <option value="#facccc"></option>
-                <option value="#ffebcc"></option>
-                <option value="#ffffcc"></option>
-                <option value="#cce8cc"></option>
-                <option value="#cce0f5"></option>
-                <option value="#ebd6ff"></option>
-                <option value="#bbbbbb"></option>
-                <option value="#f06666"></option>
-                <option value="#ffc266"></option>
-                <option value="#ffff66"></option>
-                <option value="#66b966"></option>
-                <option value="#66a3e0"></option>
-                <option value="#c285ff"></option>
-                <option value="#888888"></option>
-                <option value="#a10000"></option>
-                <option value="#b26b00"></option>
-                <option value="#b2b200"></option>
-                <option value="#006100"></option>
-                <option value="#0047b2"></option>
-                <option value="#6b24b2"></option>
-                <option value="#444444"></option>
-                <option value="#5c0000"></option>
-                <option value="#663d00"></option>
-                <option value="#666600"></option>
-                <option value="#003700"></option>
-                <option value="#002966"></option>
-                <option value="#3d1466"></option>
-            </select> -->
         </span>
         <span 
         class="ql-formats">
             <!-- <button class="ql-code-block" title="Clean button" value="super"></button> -->
-            <button class="ql-color" title="Clean button" value="super"></button>
-            <button class="ql-background" title="Clean button" value="super"></button>
+            <!-- <button class="ql-color" title="Clean button" value="super"></button>
+            <button class="ql-background" title="Clean button" value="super"></button> -->
             <button class="ql-clean" title="Clean button" value="super"></button>
         </span>
     </div>
-    <div class="bg-gray-100 px-100 py-10 flex-1 border-t-gray-800">
+    <div class="bg-gray-100 px-20 xl:px-40 2xl:px-80 py-10 flex-1 border-t-gray-800">
         <div
             id="editor"
             class="bg-white text-sm text-black focus:outline-none text-left px-10 py-15"
