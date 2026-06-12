@@ -39,7 +39,7 @@
         {
             result += `Today at ${date_obj.getHours()}:${String(date_obj.getMinutes()).padStart(2, '0')}`;
         }
-        else result += date_obj.toDateString();
+        else result += date_obj.toDateString().slice(0, 3) + "," + date_obj.toDateString().slice(3);
         return result;
     }
 
@@ -74,11 +74,11 @@
             </button>
         </div>
         <!-- Documents list -->
-        <div class="grid lg:grid-cols-3 md:grid-cols-2 sm:grid-cols-1 justify-evenly justify-items-center p-5">
+        <div class="grid lg:grid-cols-4 md:grid-cols-2 sm:grid-cols-1 justify-evenly justify-items-center p-5">
             {#if data.docs_info.length}
                 {#each data.docs_info as each_doc}
                     <button
-                        class="py-8 px-15 mx-7 my-4 text-lg font-semibold border-2 border-gray-200 rounded-2xl hover:bg-gray-200"
+                        class="py-8 px-18 mx-7 my-4 text-lg font-semibold border-2 border-gray-200 rounded-2xl hover:bg-gray-200"
                         onclick={() => open_doc_edit(each_doc.doc_id)}>
                         <div class="grid-cols-4">
                             <div class="col-span-full">{each_doc.doc_name}</div>

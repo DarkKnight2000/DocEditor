@@ -1,8 +1,8 @@
 # from changeset import Delta, Op, INSERT, delta_from_list
 from enum import Enum
 from fastapi import WebSocket
-import db_utils
-import delta
+import db_utils as db_utils
+import delta as delta
 
 class MessageType(Enum):
     CLIENT_ID = 0   # To send client ID to server

@@ -27,7 +27,7 @@
     onMount(() => {
         // websocket
         let interval_id = -1;
-        const socket = new WebSocket(`ws://localhost:8000/edit-socket/${doc_id}`);
+        const socket = new WebSocket(`ws://localhost:8000/api/edit-socket/${doc_id}`);
         const client_id = crypto.randomUUID();
         socket.addEventListener("open", () => {
             console.log("Web socket connection created!");
@@ -203,9 +203,9 @@
                 <option value="right"></option>
                 <option value="justify"></option>
             </select>
-            <button class="ql-list" title="Clean button" value="ordered"></button>
-            <button class="ql-list" title="Clean button" value="bullet"></button>
-            <button class="ql-link" title="Clean button" value="bullet"></button>
+            <button class="ql-list" title="Ordered list button" value="ordered"></button>
+            <button class="ql-list" title="Unordered list button" value="bullet"></button>
+            <button class="ql-link" title="Add link button" value="bullet"></button>
         </span>
         <span 
         class="ql-formats">

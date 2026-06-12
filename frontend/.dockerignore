@@ -1,0 +1,11 @@
+.DS_Store
+# .env
+.env.*
+.git
+.github
+.svelte-kit/
+.vscode/
+build/
+node_modules/
+npm-debug.log*
+README.md

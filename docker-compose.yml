@@ -1,16 +1,49 @@
 name: DocEditor
 
 services:
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8000:80"
+      - "413:413"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
+    # develop:
+    #   watch:
+    #     - action: rebuild
+    #       path: ./nginx/nginx.conf
+
   frontend:
     build: frontend
-    ports:
-      - "5173:5173"
+    # expose doesn't open the port, it is only for documentation
+    expose:
+      - "5173"
+    env_file: ./frontend/.env
     develop:
       watch:
         - action: sync
           path: ./frontend
-          target: /app/frontend
+          target: /code/
           ignore:
             - node_modules/
         - action: rebuild
           path: package.json
+
+  backend:
+    build: backend
+    expose:
+      - "80"
+    env_file: ./backend/.env
+    develop:
+      watch:
+        - action: sync
+          path: ./backend/app
+          target: /code/app
+          ignore:
+            - __pycache__/
+        - action: rebuild
+          path: requirements.txt

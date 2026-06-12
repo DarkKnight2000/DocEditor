@@ -1,8 +1,8 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, HTTPException, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, HTTPException, Depends, APIRouter
 from contextlib import asynccontextmanager
 from doc_syncer import DocSyncer, MessageType
 from pydantic import BaseModel
-import db_utils
+import db_utils as db_utils
 from typing import Annotated
 from jose import jwt, JWTError
 from dotenv import load_dotenv
@@ -24,9 +24,10 @@ async def server_lifespan(app: FastAPI):
     await db_handle[0].close()
 
 app = FastAPI(lifespan=server_lifespan)
+router = APIRouter(prefix="/api")
 
 
-@app.get("/")
+@router.get("/")
 async def root():
     return {"message": "Hello World!"}
 
@@ -45,21 +46,21 @@ def get_internal_user(authorization: Annotated[str | None, Header()]):
 class UserInfo(BaseModel):
     name: str
 
-@app.post("/api/user-login")
+@router.post("/user-login")
 async def user_login(user_info: UserInfo, user_id: str = Depends(get_internal_user)):
     # return upsert_user_info("", "")
     await db_utils.upsert_user_info(db_handle, user_id, user_info.name)
     return Response("Ok")
 
-@app.get("/api/get-user-docs")
+@router.get("/get-user-docs")
 async def get_user_docs(user_id: str = Depends(get_internal_user)):
     return json.dumps(await db_utils.get_user_docs(db_handle, user_id))
 
-@app.post("/api/create-new-doc")
+@router.post("/create-new-doc")
 async def create_new_doc(user_id: str = Depends(get_internal_user)):
     return json.dumps({'doc_id': await db_utils.create_new_doc(db_handle, user_id)})
 
-@app.get("/api/get-doc-info")
+@router.get("/get-doc-info")
 async def get_doc_info(doc_id: str, user_id: str = Depends(get_internal_user)):
     doc_info = await db_utils.get_doc_info_masked(db_handle, doc_id, user_id)
     if not doc_info:
@@ -85,11 +86,11 @@ active_docs: dict[int, DocSyncer] = {}
     SERVER_INIT = 4 # Send the initial data to newly connected client
     type: 4, content: List of ops, rev: rev id
 """
-@app.websocket("/edit-socket/{doc_id}")
+@router.websocket("/edit-socket/{doc_id}")
 async def edit_socket(websocket: WebSocket, doc_id: str):
     
     if not await db_utils.check_doc_exists(db_handle, doc_id):
-        websocket.close("Document doesn't exist! Login and create a new document to start editing")
+        await websocket.close("Document doesn't exist! Login and create a new document to start editing")
         return
     
     await websocket.accept()
@@ -133,3 +134,4 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
             del active_docs[doc_id]
     
     
+app.include_router(router)
