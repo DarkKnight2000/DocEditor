@@ -15,7 +15,7 @@
     <!-- Google sign in button -->
     <div id="g_id_onload"
         data-client_id={PUBLIC_GOOGLE_CLIENT_ID}
-        data-login_uri="/auth/callback">
+        data-login_uri={`auth/callback`}>
     </div>
 
     <div class="g_id_signin mt-10"

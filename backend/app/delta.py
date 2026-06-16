@@ -97,7 +97,7 @@ class OpIter:
         
 
 def compose(A, B):
-    print('compose called with', A, '|||', B)
+    # # print('compose called with', A, '|||', B)
     a_opiter = OpIter(A)
     b_opiter = OpIter(B)
     ret_delta = []
@@ -113,17 +113,17 @@ def compose(A, B):
                 
     while a_opiter.hasNext() or b_opiter.hasNext():
         if b_opiter.peekType() == INSERT:
-            print('pushing other insert')
+            # # print('pushing other insert')
             ret_delta = push(ret_delta, b_opiter.next())
         elif a_opiter.peekType() == DELETE:
-            print('pushing self delete')
+            # # print('pushing self delete')
             ret_delta = push(ret_delta, a_opiter.next())
         else:
             length = min(a_opiter.peekLength(), b_opiter.peekLength())
-            print('before pop self', a_opiter.peek(), a_opiter.peekLength())
+            # # print('before pop self', a_opiter.peek(), a_opiter.peekLength())
             a_op = a_opiter.next(length)
-            print('popped', a_op)
-            print('after pop self', a_opiter.peek(), a_opiter.peekLength())
+            # # print('popped', a_op)
+            # # print('after pop self', a_opiter.peek(), a_opiter.peekLength())
             b_op = b_opiter.next(length)
             if RETAIN in b_op:
                 newOp = {}
@@ -137,7 +137,7 @@ def compose(A, B):
                             newOp[INSERT] = a_op[INSERT]
                     else:
                         action = RETAIN if (RETAIN in a_op) else INSERT
-                        print(a_op, b_op)
+                        # print(a_op, b_op)
                         ## embedtypeanddata compose
                         newOp[action] = a_op[RETAIN] if (action == RETAIN) else b_op[RETAIN]
                         
@@ -148,25 +148,25 @@ def compose(A, B):
                 if ATTRIBUTES in b_op: b_attrs = b_op[ATTRIBUTES]
                 new_attrs = compose_attrs(a_attrs, b_attrs)
                 if new_attrs: newOp[ATTRIBUTES] = new_attrs
-                print('pushing other retain or self retain/insert')
+                # print('pushing other retain or self retain/insert')
                 push(ret_delta, newOp)
                 
                 # optimization: if rest of 'b' is only retain
                 if not b_opiter.hasNext() and ret_delta[-1] == newOp:
                     rest = a_opiter.rest()
-                    print('adding rest of other', rest)
+                    # print('adding rest of other', rest)
                     ret_delta = chop(concat(ret_delta, rest))
-                    print('after adding', ret_delta)
-                    print('compose return ', chop(ret_delta))
+                    # print('after adding', ret_delta)
+                    # print('compose return ', chop(ret_delta))
                     return (ret_delta)
                     
             # b_op should be delete
             elif DELETE in b_op and isinstance(b_op[DELETE], (float, int)):
                 if RETAIN in a_op:
-                    print('pushing other delete')
+                    # print('pushing other delete')
                     push(ret_delta, b_op)
     
-    print('compose return ', chop(ret_delta))
+    # print('compose return ', chop(ret_delta))
     return chop(ret_delta)
 
 def compose_attrs(a_attrs: dict, b_attrs: dict, keep_null: bool = False):
@@ -260,10 +260,10 @@ def chop(delta: list):
     return delta
 
 def push(delta: list, new_op):
-    print('push called with ', delta, "|||", new_op)
+    # print('push called with ', delta, "|||", new_op)
     if not len(delta):
         delta.append(new_op)
-        print('push return', delta)
+        # print('push return', delta)
         return delta
     
     index = len(delta)
@@ -271,19 +271,19 @@ def push(delta: list, new_op):
     
     # need to make copy of op?
     if not is_valid_op(new_op) or not is_valid_delta(delta):
-        print('push return', delta)
+        # print('push return', delta)
         return delta
     
     if DELETE in new_op and DELETE in last_op:
         last_op[DELETE] += new_op[DELETE]
-        print('push return', delta)
+        # print('push return', delta)
         return delta
     if INSERT in new_op and DELETE in last_op:
         index -= 1
         last_op = delta[index-1]
         if index < 0:
             delta.insert(0, new_op)
-            print('push return', delta)
+            # print('push return', delta)
             return delta
     
     same_attrs = False
@@ -299,18 +299,18 @@ def push(delta: list, new_op):
                 last_op[INSERT] += new_op[INSERT]
                 if ATTRIBUTES in new_op:
                     last_op[ATTRIBUTES] = new_op[ATTRIBUTES]
-                print('push return', delta)
+                # print('push return', delta)
                 return delta
         elif RETAIN in last_op and RETAIN in new_op:
             if isinstance(last_op[RETAIN], (float, int)) and isinstance(new_op[RETAIN], (float, int)):
                 last_op[RETAIN] += new_op[RETAIN]
                 if ATTRIBUTES in new_op:
                     last_op[ATTRIBUTES] = new_op[ATTRIBUTES]
-                print('push return', delta)
+                # print('push return', delta)
                 return delta
     
     delta.insert(index, new_op)
-    print('push return', delta)
+    # print('push return', delta)
     
     return delta
 
@@ -343,4 +343,4 @@ def length(delta):
 if __name__ == "__main__":
     a = [{'insert': '\nqwertyasdfhg'}]
     b = [{'retain': 1, 'attributes': {'align': 'center'}}]
-    print(compose(a, b))
+    # print(compose(a, b))

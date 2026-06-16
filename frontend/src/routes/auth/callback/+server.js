@@ -1,10 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 import { OAuth2Client } from 'google-auth-library';
-import { HTTP_SERVER_ADDRESS } from '$lib/server/server_creds.js'
-import * as jose from 'jose';
 import { EncryptUserID } from '$lib/server/server_auth.js';
 import {INTERNAL_JWT_SECRET, SHARED_JWT_SECRET} from '$env/static/private'
 import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public'
+import { HTTP_SERVER_ADDRESS } from '$lib/server/server_creds';
 
 /**
  * @param {string} [token]
@@ -39,7 +38,7 @@ async function authorize(token)
 
 // Reference: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
 
-export async function POST({ request, cookies })
+export async function POST({ request, cookies, url, fetch })
 {
     const cookie_g_csrf = cookies.get("g_csrf_token");
     const reqJson = await request.formData();
@@ -74,17 +73,20 @@ export async function POST({ request, cookies })
     // tell backend to create user
     const shared_user_id = await EncryptUserID(payload.sub, 30, SHARED_JWT_SECRET);
 
-    const response = await fetch(`${HTTP_SERVER_ADDRESS}/user-login`, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${shared_user_id}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({name: payload.name ?? ""})
-    }).catch(() => {
-        console.log("Couldn't reach server. Is the server running?");
+    try {
+        const _response = await fetch(`${HTTP_SERVER_ADDRESS}/user-login`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${shared_user_id}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({name: payload.name ?? ""})
+        });
+    }
+    catch(error) {
+        console.log("Couldn't reach server. Is the server running? Details: ", error);
         redirect(303, "/");
-    });
+    };
 
     // return to myhome page
     redirect(303, "/myhome");

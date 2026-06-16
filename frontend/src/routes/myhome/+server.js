@@ -1,7 +1,7 @@
 import { GetAuthHeader } from "$lib/server/server_auth";
 import { HTTP_SERVER_ADDRESS } from "$lib/server/server_creds";
 
-export async function POST({ request, cookies})
+export async function POST({ request, cookies, url, fetch})
 {
     const auth_header = await GetAuthHeader(cookies.get('user_id') ?? "", 30);
 

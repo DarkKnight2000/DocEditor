@@ -57,7 +57,7 @@
     </div>
 
     <!-- Title -->
-     <div class="flex flex-col items-center bg-gray-100 py-25 self-stretch">
+     <div class="flex flex-col items-center bg-gray-100 py-15 self-stretch">
         <p class="text-6xl text-gray-800 font-bold my-5">Collaborative Document Editing</p>
         <p class="text-2xl text-gray-800 font-medium m-1">Minimal & Open Source</p>
     </div>
@@ -74,7 +74,7 @@
             </button>
         </div>
         <!-- Documents list -->
-        <div class="grid lg:grid-cols-4 md:grid-cols-2 sm:grid-cols-1 justify-evenly justify-items-center p-5">
+        <div class="grid xl:grid-cols-3 lg:grid-cols-2 grid-cols-1 justify-evenly justify-items-center p-5">
             {#if data.docs_info.length}
                 {#each data.docs_info as each_doc}
                     <button

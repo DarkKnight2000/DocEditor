@@ -5,7 +5,7 @@ import { HTTP_SERVER_ADDRESS } from '$lib/server/server_creds';
 import { redirect } from '@sveltejs/kit';
 
 // This is only on server because "cookies" can only be accessed on server
-export async function load({ cookies })
+export async function load({ cookies, fetch, url })
 {
 	if(!cookies.get('user_id'))
     {
@@ -25,7 +25,10 @@ export async function load({ cookies })
 				'Authorization': auth_header
 			}
 		});
-		const docs_info = JSON.parse(await response.json());
+		console.log('finished request');
+		const resp = await response.json();
+		console.log(resp);
+		const docs_info = JSON.parse(resp);
 		// console.log(docs_info);
 
 		return {

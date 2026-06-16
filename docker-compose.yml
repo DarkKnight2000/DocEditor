@@ -6,7 +6,7 @@ services:
     image: nginx:alpine
     ports:
       - "8000:80"
-      - "413:413"
+      # - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -18,11 +18,21 @@ services:
     #       path: ./nginx/nginx.conf
 
   frontend:
-    build: frontend
+    build:
+      context: ./frontend
+      args:
+        - INTERNAL_JWT_SECRET
+        - SHARED_JWT_SECRET
+        - PUBLIC_GOOGLE_CLIENT_ID
     # expose doesn't open the port, it is only for documentation
     expose:
-      - "5173"
-    env_file: ./frontend/.env
+      - "3000"
+    env_file:
+      - ./frontend/.env
+    # environment:
+    #   - INTERNAL_JWT_SECRET=${INTERNAL_JWT_SECRET}
+    #   - SHARED_JWT_SECRET=${SHARED_JWT_SECRET}
+    #   - PUBLIC_GOOGLE_CLIENT_ID=${PUBLIC_GOOGLE_CLIENT_ID}
     develop:
       watch:
         - action: sync
@@ -36,8 +46,9 @@ services:
   backend:
     build: backend
     expose:
-      - "80"
-    env_file: ./backend/.env
+      - "8000"
+    env_file:
+      - ./backend/.env
     develop:
       watch:
         - action: sync

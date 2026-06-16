@@ -4,6 +4,8 @@
     import "quill/dist/quill.snow.css";
     import { onDestroy, onMount, tick } from "svelte";
     import "$lib/styles/quill-editor.css";
+    import { page } from "$app/state";
+    import { dev } from "$app/environment";
 
     // sync status to show in nav bar
     let { sync_status = $bindable('Waiting...'), doc_id } = $props();
@@ -27,7 +29,12 @@
     onMount(() => {
         // websocket
         let interval_id = -1;
-        const socket = new WebSocket(`ws://localhost:8000/api/edit-socket/${doc_id}`);
+        let ws_server_address = `ws://${page.url.host}/api`;
+        if(dev)
+        {
+            ws_server_address = `ws://localhost:8000/api`;
+        }
+        const socket = new WebSocket(`${ws_server_address}/edit-socket/${doc_id}`);
         const client_id = crypto.randomUUID();
         socket.addEventListener("open", () => {
             console.log("Web socket connection created!");

@@ -1,5 +1,5 @@
 import { GetAuthHeader, MakeFetchRequest } from "$lib/server/server_auth.js";
-import { HTTP_SERVER_ADDRESS } from "$lib/server/server_creds.js";
+import { HTTP_SERVER_ADDRESS } from "$lib/server/server_creds";
 import { redirect } from "@sveltejs/kit";
 
 export const ssr = false;
