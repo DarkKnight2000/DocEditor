@@ -1,12 +1,17 @@
 <script>
     import { goto } from '$app/navigation';
+    import logout from '$lib/assets/logout.png'
 
     const { data } = $props();
 
     async function remote_create_doc()
     {
         const response = await fetch('/myhome', {
-            'method': 'POST'
+            'method': 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'func': 'create_doc'})
         });
         if(response.ok)
         {
@@ -14,6 +19,24 @@
             const res_json = await response.json();
             console.log(res_json);
             goto(`/edit/${res_json['doc_id']}`);
+        }
+    }
+
+    async function remote_logout()
+    {
+        const response = await fetch('/myhome', {
+            'method': 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({'func': 'logout'})
+        });
+        if(response.ok)
+        {
+            // open document edit page
+            const res_json = await response.text();
+            console.log(res_json);
+            goto(`/`);
         }
     }
 
@@ -48,12 +71,16 @@
 <div class="flex flex-col font-nunito items-center w-full">
 
     <!-- Nav bar -->
-    <div class="flex flex-row self-stretch items-center justify-between border-b-gray-300 border-b-2 px-5 py-2 sticky top-0 bg-white">
+    <div class="flex flex-row self-stretch items-center border-b-gray-300 border-b-2 px-5 sticky top-0 bg-white">
         <p class="text-2xl text-gray-800 font-bold ml-30">Doc Editor</p>
-        <div id="home-profile-info" class="justify-self-end mr-30">
+        <div id="home-profile-info" class="justify-self-end ml-auto mr-10">
             <img src="{data.profile_pic}" alt="User profile pic" class="w-10 h-10 m-auto mt-2 mb-1 rounded-full"/>
             <p>{data.user_name}</p>
         </div>
+        <button id="home-logout" onclick={remote_logout} class="justify-self-end mr-20 hover:bg-gray-300 p-4">
+            <img src="{logout}" alt="Logout button" class="w-7 h-7 m-auto mt-2 mb-1"/>
+            <p class="mt-4">Logout</p>
+        </button>
     </div>
 
     <!-- Title -->
@@ -63,7 +90,7 @@
     </div>
 
     <!-- Body -->
-     <div class="mx-60 self-stretch flex flex-col">
+     <div class="mx-60 mb-30 self-stretch flex flex-col">
         <!-- Filter -->
         <div class="mt-3 px-5 py-3 flex flex-row justify-between">
             <p class="font-nunito self-start font-bold text-md py-2">Your Documents</p>
@@ -90,6 +117,11 @@
             {/if}
             
         </div>
+     </div>
+
+     <!-- Footer -->
+     <div class="text-sm bg-gray-300 py-2 self-stretch text-center underline">
+        <a href="https://www.flaticon.com/free-icons/logout" target="_blank" rel="noopener noreferrer" title="logout icons">Logout icons created by Freepik - Flaticon</a>
      </div>
 
 </div>

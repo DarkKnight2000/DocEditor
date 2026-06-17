@@ -39,7 +39,7 @@ class DocSyncer:
         del self.clients[client_id]
         
     async def add_revision(self, db_handle, client_id, rev_changes, reference_id):
-        print(rev_changes)
+        # print(rev_changes)
         
         # Get data and CAS from database, update is successful if CAS matches before updating
         while True:

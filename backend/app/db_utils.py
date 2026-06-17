@@ -123,7 +123,7 @@ async def create_new_doc(db_handle: DB_Handle, user_id: str):
         'history': [],
         'head': {'rev_id': 0, 'delta': []},
         'last_edit': get_current_timestamp()})
-    print(result.key)
+    # print(result.key)
     return doc_id
 
 

@@ -107,7 +107,7 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
     try:
         while True:
             data = await websocket.receive_json()
-            print("Received data: ", data)
+            # print("Received data: ", data)
             if data["type"] == MessageType.CLIENT_ID.value:
                 my_id = data["id"]
                 doc_syncer.connect(my_id, websocket)

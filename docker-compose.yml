@@ -29,10 +29,6 @@ services:
       - "3000"
     env_file:
       - ./frontend/.env
-    # environment:
-    #   - INTERNAL_JWT_SECRET=${INTERNAL_JWT_SECRET}
-    #   - SHARED_JWT_SECRET=${SHARED_JWT_SECRET}
-    #   - PUBLIC_GOOGLE_CLIENT_ID=${PUBLIC_GOOGLE_CLIENT_ID}
     develop:
       watch:
         - action: sync
@@ -44,7 +40,8 @@ services:
           path: package.json
 
   backend:
-    build: backend
+    build:
+      context: ./backend
     expose:
       - "8000"
     env_file:

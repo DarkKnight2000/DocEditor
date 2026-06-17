@@ -74,7 +74,7 @@
             // }
             // console.log(oldDelta.ops);
             ClientState.Y = ClientState.Y.compose(delta);
-            console.log(ClientState.Y);
+            // console.log(ClientState.Y);
         });
 
         // // a happened, so what should b be, because reference changed
@@ -111,7 +111,7 @@
 
         // receive content from server
         socket.addEventListener("message", (event) => {
-            console.log("Got message from server:", event);
+            // console.log("Got message from server:", event);
             try {
                 const recv_data = JSON.parse(event.data);
                 if (recv_data.type == MessageTypes.SERVER_ACK) {
@@ -143,7 +143,7 @@
                     quill.updateContents(D, "api");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
                     // initial changes
-                    console.log("server init", recv_data.content)
+                    // console.log("server init", recv_data.content)
                     // console.log("server init", JSON.parse(recv_data.content))
                     ClientState.rev_id = recv_data.rev;
                     ClientState.A = new Delta((recv_data.content));
