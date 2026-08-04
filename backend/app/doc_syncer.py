@@ -1,8 +1,9 @@
 # from changeset import Delta, Op, INSERT, delta_from_list
 from enum import Enum
+import json
 from fastapi import WebSocket
-import db_utils as db_utils
-import delta as delta
+import app.couchdb_utils as db_utils
+import app.delta as delta
 
 class MessageType(Enum):
     CLIENT_ID = 0   # To send client ID to server
@@ -83,7 +84,7 @@ class DocSyncer:
                 await sock.send_json({
                     "type": MessageType.SERVER_REV.value,
                     "rev": next_rev_id,
-                    "content": str(rev_changes)
+                    "content": json.dumps(rev_changes)
                 })
 
         # revnode = RevNode()

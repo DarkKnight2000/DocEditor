@@ -1,8 +1,8 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, HTTPException, Depends, APIRouter
 from contextlib import asynccontextmanager
-from doc_syncer import DocSyncer, MessageType
+from app.doc_syncer import DocSyncer, MessageType
 from pydantic import BaseModel
-import db_utils as db_utils
+import app.couchdb_utils as db_utils
 from typing import Annotated
 from jose import jwt, JWTError
 from dotenv import load_dotenv
@@ -21,7 +21,7 @@ async def server_lifespan(app: FastAPI):
     #     print('Database connection failed during server initialization')
     #     raise Exception('Database connection failed during server initialization')
     yield
-    await db_handle[0].close()
+    await db_utils.db_disconnect(db_handle)
 
 app = FastAPI(lifespan=server_lifespan)
 router = APIRouter(prefix="/api")
@@ -45,11 +45,12 @@ def get_internal_user(authorization: Annotated[str | None, Header()]):
 
 class UserInfo(BaseModel):
     name: str
+    email: str
 
 @router.post("/user-login")
 async def user_login(user_info: UserInfo, user_id: str = Depends(get_internal_user)):
     # return upsert_user_info("", "")
-    await db_utils.upsert_user_info(db_handle, user_id, user_info.name)
+    await db_utils.upsert_user_info(db_handle, user_id, user_info.name, user_info.email)
     return Response("Ok")
 
 @router.get("/get-user-docs")
@@ -66,6 +67,16 @@ async def get_doc_info(doc_id: str, user_id: str = Depends(get_internal_user)):
     if not doc_info:
         return Response('You do not have permission to access this document!', status_code=403)
     return json.dumps(doc_info)
+
+
+class RenameReqBody(BaseModel):
+    id: str
+    name: str
+@router.post("/rename-doc")
+async def rename_doc(req_body: RenameReqBody, user_id: str = Depends(get_internal_user)):
+    if await db_utils.rename_doc(db_handle, req_body.id, req_body.name, user_id):
+        return Response('ok', status_code=200)
+    return Response('failed', status_code=403)
 
 
 active_docs: dict[int, DocSyncer] = {}
@@ -133,5 +144,23 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
         if not len(active_docs[doc_id].clients):
             del active_docs[doc_id]
     
+    
+# Collaborators section
+@router.get("/get-collab-info")
+async def get_collab_info(doc_id: str, user_id: str = Depends(get_internal_user)):
+    collab_info = await db_utils.get_collab_info(db_handle, doc_id, user_id)
+    return Response(json.dumps(collab_info))
+
+class EditCollabReqBody(BaseModel):
+    doc_id: str
+    user_email: str
+    op: bool
+@router.post("/edit-collab")
+async def edit_collab(req_body: EditCollabReqBody, user_id: str = Depends(get_internal_user)):
+    if await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op):
+        return Response('ok', status_code=200)
+    return Response('failed', status_code=403)
+
+    # TODO if user is still connected, disconnect them
     
 app.include_router(router)

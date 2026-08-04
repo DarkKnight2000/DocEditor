@@ -24,4 +24,5 @@ export async function POST({ request, cookies, url, fetch})
 		cookies.delete('user_id', {'path': '/'});
 		return new Response('ok');
 	}
+    return new Response('Not allowed', {status: 404});
 }

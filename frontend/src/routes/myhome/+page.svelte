@@ -68,18 +68,18 @@
 
 </script>
 
-<div class="flex flex-col font-nunito items-center w-full">
+<div class="flex flex-col font-nunito items-center w-full min-h-screen">
 
     <!-- Nav bar -->
     <div class="flex flex-row self-stretch items-center border-b-gray-300 border-b-2 px-5 sticky top-0 bg-white">
         <p class="text-2xl text-gray-800 font-bold ml-30">Doc Editor</p>
         <div id="home-profile-info" class="justify-self-end ml-auto mr-10">
-            <img src="{data.profile_pic}" alt="User profile pic" class="w-10 h-10 m-auto mt-2 mb-1 rounded-full"/>
+            <img src="{data.profile_pic}" alt="User profile pic" class="w-8 h-8 m-auto mt-2 mb-1 rounded-full"/>
             <p>{data.user_name}</p>
         </div>
         <button id="home-logout" onclick={remote_logout} class="justify-self-end mr-20 hover:bg-gray-300 p-4">
-            <img src="{logout}" alt="Logout button" class="w-7 h-7 m-auto mt-2 mb-1"/>
-            <p class="mt-4">Logout</p>
+            <img src="{logout}" alt="Logout button" class="w-5 h-5 m-auto mt-2"/>
+            <p class="mt-3">Logout</p>
         </button>
     </div>
 
@@ -101,27 +101,30 @@
             </button>
         </div>
         <!-- Documents list -->
-        <div class="grid xl:grid-cols-3 lg:grid-cols-2 grid-cols-1 justify-evenly justify-items-center p-5">
+        <div class="flex-auto">
             {#if data.docs_info.length}
-                {#each data.docs_info as each_doc}
-                    <button
-                        class="py-8 px-18 mx-7 my-4 text-lg font-semibold border-2 border-gray-200 rounded-2xl hover:bg-gray-200"
-                        onclick={() => open_doc_edit(each_doc.doc_id)}>
-                        <div class="grid-cols-4">
-                            <div class="col-span-full">{each_doc.doc_name}</div>
-                            <div class="col-span-2 text-gray-600 mt-5 text-sm">{each_doc.owner_name}</div>
-                            <div class="col-span-1 text-gray-400 text-sm">{get_display_datetime(each_doc.last_edit)}</div>
-                        </div>
-                    </button>
-                {/each}
+                <div class="grid xl:grid-cols-3 lg:grid-cols-2 grid-cols-1 justify-evenly justify-items-center p-5">
+                    {#each data.docs_info as each_doc}
+                        <button
+                            class="py-8 px-18 mx-7 my-4 text-lg font-semibold border-2 border-gray-200 rounded-2xl hover:bg-gray-200"
+                            onclick={() => open_doc_edit(each_doc.doc_id)}>
+                            <div class="grid-cols-4">
+                                <div class="col-span-full">{each_doc.doc_name}</div>
+                                <div class="col-span-2 text-gray-600 mt-5 text-sm">{each_doc.owner_name}</div>
+                                <div class="col-span-1 text-gray-400 text-sm">{get_display_datetime(each_doc.last_edit)}</div>
+                            </div>
+                        </button>
+                    {/each}
+                </div>
+            {:else}
+                <p class="text-sm text-gray-600 text-center mt-20">No Documents.</p>
             {/if}
-            
         </div>
      </div>
 
      <!-- Footer -->
-     <div class="text-sm bg-gray-300 py-2 self-stretch text-center underline">
-        <a href="https://www.flaticon.com/free-icons/logout" target="_blank" rel="noopener noreferrer" title="logout icons">Logout icons created by Freepik - Flaticon</a>
+     <div class="text-sm bg-gray-100 mt-auto py-2 self-stretch text-center underline">
+        <a href="https://www.flaticon.com/free-icons/" target="_blank" rel="noopener noreferrer" title="logout icons">Logout icons created by Freepik - Flaticon</a>
      </div>
 
 </div>

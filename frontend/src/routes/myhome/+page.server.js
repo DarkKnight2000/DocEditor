@@ -27,7 +27,7 @@ export async function load({ cookies, fetch, url })
 		});
 		console.log('finished request');
 		const resp = await response.json();
-		console.log(resp);
+		console.log("docs info", resp);
 		const docs_info = JSON.parse(resp);
 		// console.log(docs_info);
 

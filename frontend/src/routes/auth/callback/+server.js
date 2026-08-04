@@ -80,11 +80,15 @@ export async function POST({ request, cookies, url, fetch })
                 'Authorization': `Bearer ${shared_user_id}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({name: payload.name ?? ""})
+            body: JSON.stringify({
+                name: payload.name ?? "",
+                email: payload.email ?? ""
+            })
         });
     }
     catch(error) {
-        console.log("Couldn't reach server. Is the server running? Details: ", error);
+        console.log("Couldn't reach server. Is the server running? Server at", HTTP_SERVER_ADDRESS);
+        console.log("Details: ", error);
         redirect(303, "/");
     };
 
