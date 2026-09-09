@@ -11,16 +11,12 @@
     let sync_status = $state('');
     // derived state fo displaying document name
     let shown_doc_name = $derived(data.doc_name);
-    // needed incase of rename error
-    // svelte-ignore state_referenced_locally
-    let og_doc_name = $state.snapshot(shown_doc_name);
-
-    $effect(() => {
-        console.log(`User changed doc name to ${shown_doc_name}`);
-    });
 
     async function remote_rename_doc()
     {
+        // needed incase of rename error
+        let og_doc_name = $state.snapshot(shown_doc_name);
+
         const response = await fetch(`/edit/${data.doc_id}`,  {
             'method': 'POST',
             headers: {
@@ -99,6 +95,20 @@
         }
     }
 
+    /**
+     * @type {HTMLDialogElement}
+     */
+    let noperm_dialog_element;
+    function no_perm_dialog()
+    {
+        if(!noperm_dialog_element.open) noperm_dialog_element.showModal();
+    }
+    
+    $effect(() => {
+        console.log(`User changed doc name to ${shown_doc_name}`);
+        if(data.hidden) no_perm_dialog();
+    });
+
 </script>
 
 <!-- Whole page -->
@@ -128,7 +138,7 @@
     </div>
 
     <!-- Editor -->
-    <Editor bind:sync_status={sync_status} doc_id={data.doc_id}/>
+    <Editor bind:sync_status={sync_status} doc_id={data.doc_id} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
 </div>
 
 <!-- Collab editor dialog -->
@@ -156,5 +166,14 @@
                 <p class="text-sm text-gray-300">No Collaborators</p>
             {/if}
         </div>
+    </div>
+</dialog>
+
+
+<!-- No permission dialog -->
+<dialog  id="no-perm-dialog" class="m-auto rounded-2xl" closedby='none' bind:this={noperm_dialog_element}>
+    <div class="py-10 px-20 flex flex-col gap-8 font-nunito">
+        <p class="font-semibold text-2xl text-center">You do not have permission to edit this document</p>
+        <p class="text-sm text-center">If you know the owner of this document, you can request them for access.</p>
     </div>
 </dialog>

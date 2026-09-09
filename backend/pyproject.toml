@@ -9,4 +9,5 @@ dependencies = [
     "python-jose[cryptography]",
     "python-dotenv",
     "couchbase>=4.6.1",
+    "asyncpg>=0.31.0",
 ]

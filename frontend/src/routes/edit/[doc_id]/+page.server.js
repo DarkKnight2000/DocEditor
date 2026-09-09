@@ -30,7 +30,12 @@ export async function load({ params, cookies })
         else
         {
             console.log('Error response from server: ', response.status);
-            return {};
+            return {
+                'doc_name': '--:--',
+                'doc_id': params.doc_id,
+                'user_pic': cookies.get('user_pic'),
+                'hidden': true
+            };
         };
     }
     catch (ex)

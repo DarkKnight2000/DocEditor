@@ -2,7 +2,7 @@
 from enum import Enum
 import json
 from fastapi import WebSocket
-import app.couchdb_utils as db_utils
+import app.postgres_utils as db_utils
 import app.delta as delta
 
 class MessageType(Enum):
@@ -11,6 +11,9 @@ class MessageType(Enum):
     SERVER_REV = 2  # Send other client changes to a client
     SERVER_ACK = 3  # Send an acknowledge signal
     SERVER_INIT = 4 # Send the initial data to newly connected client
+    
+    SERVER_DOC_RENAME = 5
+    SERVER_DROP_ACCESS = 6 # Client removed as a collaborator
 
 """
 Compose - Add one after another
@@ -32,12 +35,38 @@ class DocSyncer:
         # self.headtext:Delta = Delta([Op(INSERT, "Hello World!")]) # current state of document
         # self.head_record_id = 0     # record ID of head
         
-    def connect(self, id:str, websocket:WebSocket):
-        if id not in self.clients:
-            self.clients[id] = websocket
+    async def connect(self, user_id: str, websocket: WebSocket, db_handle: db_utils.DB_Handle):
+        if user_id not in self.clients:
+            self.clients[user_id] = websocket
+
+            try:
+                _, doc_content = await db_utils.get_doc_info(db_handle, self.doc_id)
+            except LookupError:
+                await websocket.send_json({'error': f'Document with ID {self.doc_id} doesnt exist!'})
+                await websocket.close()
+                return
+
+            await websocket.send_json({
+                "type": MessageType.SERVER_INIT.value,
+                "rev": doc_content['head']['rev_id'],
+                "content": doc_content['head']['delta']
+            })
+            await db_utils.update_client_rev(db_handle, self.doc_id, user_id, doc_content['head']['rev_id'])
         
-    def disconnect(self, client_id):
+    async def disconnect(self, client_id, db_handle: db_utils.DB_Handle, send_disconnect = False):
+        if send_disconnect:
+            await self.clients[client_id].send_json({
+                "type": MessageType.SERVER_DROP_ACCESS.value,
+            })
         del self.clients[client_id]
+        await db_utils.delete_client_rev(db_handle, self.doc_id, client_id)
+        
+    async def send_doc_rename(self, new_doc_name):
+        for _, csocket in self.clients:
+            await csocket.send_json({
+                "type": MessageType.SERVER_DOC_RENAME.value,
+                "name": new_doc_name
+            })
         
     async def add_revision(self, db_handle, client_id, rev_changes, reference_id):
         # print(rev_changes)
@@ -56,10 +85,7 @@ class DocSyncer:
             if len(content['history']):
                 next_rev_id = content['history'][-1]['rev_id'] + 1
             edit_ts = db_utils.get_current_timestamp()
-            # content['clients'][client_id] = {
-            #     'sync_rev_id': next_rev_id,
-            #     'sync_timestamp': edit_ts
-            # }
+            content['clients'][client_id] = next_rev_id
             content['history'].append({
                 'rev_id': next_rev_id,
                 'delta': rev_changes
@@ -69,6 +95,10 @@ class DocSyncer:
                 'delta': delta.compose(content['head']['delta'], rev_changes)
             }
             content['last_edit'] = edit_ts
+            
+            # delete old history behind all clients
+            min_rev_id = min(content['clients'].values())
+            content['history'] = [i for i in content['history'] if i['rev_id'] >= min_rev_id]
             
             if await db_utils.try_update_doc(db_handle, self.doc_id, content, cas):
                 break
@@ -86,25 +116,3 @@ class DocSyncer:
                     "rev": next_rev_id,
                     "content": json.dumps(rev_changes)
                 })
-
-        # revnode = RevNode()
-        # revnode.client_id = client_id
-        # revnode.rev_id = self.head_record_id + 1
-        # revnode.changeset = rev_changes
-        # self.rev_record.append(revnode)
-        # self.head_record_id = revnode.rev_id
-        # self.headtext = self.headtext.compose(rev_changes)
-        # print(self.headtext)
-        
-        # for cl, sock in self.clients.items():
-        #     if cl == client_id:
-        #         await sock.send_json({
-        #             "type": MessageType.SERVER_ACK.value,
-        #             "rev": self.head_record_id
-        #         })
-        #     else:
-        #         await sock.send_json({
-        #             "type": MessageType.SERVER_REV.value,
-        #             "rev": self.head_record_id,
-        #             "content": str(rev_changes)
-        #         })

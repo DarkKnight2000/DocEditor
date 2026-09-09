@@ -8,7 +8,7 @@
     import { dev } from "$app/environment";
 
     // sync status to show in nav bar
-    let { sync_status = $bindable('Waiting...'), doc_id } = $props();
+    let { sync_status = $bindable('Waiting...'), doc_id, doc_name = $bindable(), noperm_dialog } = $props();
 
     const MessageTypes = {
         CLIENT_ID: 0,
@@ -16,6 +16,8 @@
         SERVER_REV: 2,
         SERVER_ACK: 3,
         SERVER_INIT: 4,
+        SERVER_DOC_RENAME: 5,
+        SERVER_DROP_ACCESS: 6
     };
 
     const ClientState = {
@@ -51,7 +53,6 @@
         });
 
         // editor
-        // console.log("qtool ", document.getElementById("editor-toolbar"));
         const quill = new Quill("#editor", {
             theme: "snow",
             modules: {
@@ -66,28 +67,10 @@
 
         quill.on("text-change", (delta, _, source) => {
             if (source == "api") {
-                // console.log("An API call triggered this change.");
                 return;
             }
-            // else if (source == 'user') {
-            //     console.log('A user action triggered this change.');
-            // }
-            // console.log(oldDelta.ops);
             ClientState.Y = ClientState.Y.compose(delta);
-            // console.log(ClientState.Y);
         });
-
-        // // a happened, so what should b be, because reference changed
-        // // if a happened before, retain 1 and then b
-        // // if there are clashing inserts, where to give priority -> that is the second parameter for transform
-        // same as "follows" in notes
-        // const a = new Delta().insert('a');
-        // const b = new Delta().insert('b').retain(5).insert('c');
-
-        // const composed = a.transform(b, true);
-        // console.log(composed.ops);
-        // const composed2 = a.transform(b, false);
-        // console.log(composed2.ops);
 
         // event loop
         interval_id = setInterval(() => {
@@ -105,8 +88,6 @@
                 ClientState.Y = new Delta();
                 sync_status = 'Syncing...'
             }
-            // console.log("x", ClientState.X);
-            // console.log("y", ClientState.Y);
         }, 500);
 
         // receive content from server
@@ -123,11 +104,6 @@
                 } else if (recv_data.type == MessageTypes.SERVER_REV) {
                     // other client changes
                     const B = new Delta(JSON.parse(recv_data.content));
-                    // console.log("B", B);
-                    // console.log("A", ClientState.A);
-                    // console.log("X", ClientState.X);
-                    // console.log("Y", ClientState.Y);
-                    // console.log("copm", ClientState.A.compose(B));
                     const An = ClientState.A.compose(B);
                     const Xn = B.transform(ClientState.X, true);
                     const Yn = ClientState.X.transform(B, false).transform(ClientState.Y);
@@ -136,20 +112,20 @@
                     ClientState.X = Xn;
                     ClientState.Y = Yn;
                     ClientState.rev_id = recv_data.rev;
-                    // console.log("delta", D)
-                    // console.log("An", An)
-                    // console.log("Xn", Xn)
-                    // console.log("Yn", Yn)
                     quill.updateContents(D, "api");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
-                    // initial changes
-                    // console.log("server init", recv_data.content)
-                    // console.log("server init", JSON.parse(recv_data.content))
                     ClientState.rev_id = recv_data.rev;
                     ClientState.A = new Delta((recv_data.content));
-                    // console.log(ClientState.A);
                     quill.setContents(ClientState.A);
                     sync_status = 'Saved !';
+                } else if (recv_data.type == MessageTypes.SERVER_DOC_RENAME) {
+                    // rename state variable in parent
+                    doc_name = recv_data.name;
+                } else if (recv_data.type == MessageTypes.SERVER_DROP_ACCESS) {
+                    // rename state variable in parent
+                    noperm_dialog();
+                } else {
+                    console.log("No type: ", recv_data);
                 }
             } catch (error) {
                 console.error("Error parsing JSON:", error);

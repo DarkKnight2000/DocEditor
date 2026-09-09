@@ -105,9 +105,8 @@ doc_id:
         owner
         edit_collab
         clients:
-            user_id
-            sync_rev_id
-            sync_timestamp
+            user_id:
+                sync_rev_id
         history:
             rev_id
             delta
@@ -124,7 +123,7 @@ async def create_new_doc(db_handle: DB_Handle, user_id: str):
         'doc_name': 'New Document',
         'owner': user_id,
         'edit_collab': [],
-        'clients': [],
+        'clients': {},
         'history': [],
         'head': {'rev_id': 0, 'delta': []},
         'last_edit': get_current_timestamp()})
@@ -175,6 +174,25 @@ async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_cas):
     except CASMismatchException as ex:
         return False
     return True
+
+async def update_client_rev(db_handle: DB_Handle, doc_id: str, user_id: str, rev_id: str):
+    cas, content = await get_doc_info(db_handle, doc_id)
+    content['clients'][user_id] = rev_id
+    
+    # delete old history behind all clients
+    min_rev_id = min(content['clients'].values()) if len(content['clients']) else content['head']['rev_id']
+    content['history'] = [i for i in content['history'] if i['rev_id'] >= min_rev_id]
+    return await try_update_doc(db_handle, doc_id, content, cas)
+
+async def delete_client_rev(db_handle: DB_Handle, doc_id: str, user_id: str):
+    cas, content = await get_doc_info(db_handle, doc_id)
+    del content['clients'][user_id]
+    
+    # delete old history behind all clients
+    min_rev_id = min(content['clients'].values()) if len(content['clients']) else content['head']['rev_id']
+    content['history'] = [i for i in content['history'] if i['rev_id'] >= min_rev_id]
+    # print('disconnect', content)
+    return await try_update_doc(db_handle, doc_id, content, cas)
         
 async def get_collab_info(db_handle: DB_Handle, doc_id: str, user_id: str):
     _, content = await get_doc_info(db_handle, doc_id)
@@ -207,13 +225,13 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
         print('Failed parsing query string, Details: ', ex.error_context)
         
     if remove:
-        if new_user_info['user_id'] not in content['edit_collab']: return True
+        if new_user_info['user_id'] not in content['edit_collab']: return True, new_user_info['user_id']
         content['edit_collab'].remove(new_user_info['user_id'])
     else:
-        if new_user_info['user_id'] in content['edit_collab']: return True
+        if new_user_info['user_id'] in content['edit_collab']: return True, new_user_info['user_id']
         content['edit_collab'].append(new_user_info['user_id'])
     
-    return await try_update_doc(db_handle, doc_id, content, cas)
+    return await try_update_doc(db_handle, doc_id, content, cas), new_user_info['user_id']
     
 
 if __name__ == "__main__":

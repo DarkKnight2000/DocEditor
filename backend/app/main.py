@@ -2,15 +2,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, H
 from contextlib import asynccontextmanager
 from app.doc_syncer import DocSyncer, MessageType
 from pydantic import BaseModel
-import app.couchdb_utils as db_utils
+import app.postgres_utils as db_utils
 from typing import Annotated
 from jose import jwt, JWTError
-from dotenv import load_dotenv
 import os
 import json
 import sys
 
-load_dotenv()
 db_handle: db_utils.DB_Handle = None
 
 @asynccontextmanager
@@ -75,11 +73,12 @@ class RenameReqBody(BaseModel):
 @router.post("/rename-doc")
 async def rename_doc(req_body: RenameReqBody, user_id: str = Depends(get_internal_user)):
     if await db_utils.rename_doc(db_handle, req_body.id, req_body.name, user_id):
+        await active_docs[req_body.id].send_doc_rename(req_body.name)
         return Response('ok', status_code=200)
     return Response('failed', status_code=403)
 
 
-active_docs: dict[int, DocSyncer] = {}
+active_docs: dict[str, DocSyncer] = {}
 
 """
     CLIENT_ID = 0   # To send client ID to server
@@ -121,26 +120,14 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
             # print("Received data: ", data)
             if data["type"] == MessageType.CLIENT_ID.value:
                 my_id = data["id"]
-                doc_syncer.connect(my_id, websocket)
-                doc_info = await db_utils.get_doc_info(db_handle, doc_id)
-                if not doc_info[0]:
-                    websocket.send_json({'error': f'Document with ID {doc_id} doesnt exist!'})
-                    await websocket.close()
-                await websocket.send_json({
-                    "type": MessageType.SERVER_INIT.value,
-                    "rev": doc_info[1]['head']['rev_id'],
-                    "content": doc_info[1]['head']['delta']
-                })
+                await doc_syncer.connect(my_id, websocket, db_handle)
             elif data["type"] == MessageType.CLIENT_REV.value:
                 C = data["content"]
                 r_c = data["rev"]
                 await doc_syncer.add_revision(db_handle, my_id, C, r_c)
-                
-            
     except WebSocketDisconnect:
         if my_id:
-            doc_syncer.disconnect(my_id)
-            del doc_syncer
+            await doc_syncer.disconnect(my_id, db_handle)
         if not len(active_docs[doc_id].clients):
             del active_docs[doc_id]
     
@@ -157,10 +144,13 @@ class EditCollabReqBody(BaseModel):
     op: bool
 @router.post("/edit-collab")
 async def edit_collab(req_body: EditCollabReqBody, user_id: str = Depends(get_internal_user)):
-    if await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op):
-        return Response('ok', status_code=200)
-    return Response('failed', status_code=403)
+    res, collab_uid = await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op)
+    if not res: return Response('failed', status_code=403)
 
-    # TODO if user is still connected, disconnect them
+    # if removing, disconnect active connections
+    if req_body.op and req_body.doc_id in active_docs:
+        await active_docs[req_body.doc_id].disconnect(collab_uid, db_handle, True)
+    return Response('ok', status_code=200)
+    
     
 app.include_router(router)

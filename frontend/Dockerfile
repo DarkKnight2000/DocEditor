@@ -7,6 +7,8 @@ RUN npm install
 
 COPY . .
 
+# They are private env vars. So they are not needed during build
+# They are passed through "env_file:" line in docker-compose.yml during runtime
 ARG INTERNAL_JWT_SECRET
 ARG SHARED_JWT_SECRET
 ARG PUBLIC_GOOGLE_CLIENT_ID
