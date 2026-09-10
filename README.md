@@ -68,8 +68,6 @@ POSTGRES_PASSWORD=              # Must match backend/.env
 POSTGRES_DB=                    # Must match backend/.env
 ```
 
-> Note: the postgres service's `healthcheck:` in `docker-compose.yml` reads `POSTGRES_USER`/`POSTGRES_DB` via `${...}` compose-file interpolation, which comes from a root-level `.env` — not from `postgres/postgres.env`. Keep that root `.env` in sync with `postgres/postgres.env` or the healthcheck will fall back to its default values.
-
 ## Running Locally
 
 ### With Docker (recommended)
@@ -87,7 +85,7 @@ make dev
 
 App is available at `http://localhost:8000`.
 
-### Without Docker
+### Without Docker (tested with an older commit)
 
 **Frontend**
 

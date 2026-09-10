@@ -62,7 +62,7 @@ class DocSyncer:
         await db_utils.delete_client_rev(db_handle, self.doc_id, client_id)
         
     async def send_doc_rename(self, new_doc_name):
-        for _, csocket in self.clients:
+        for csocket in self.clients.values():
             await csocket.send_json({
                 "type": MessageType.SERVER_DOC_RENAME.value,
                 "name": new_doc_name
