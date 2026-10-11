@@ -1,4 +1,4 @@
-import { SHARED_JWT_SECRET } from '$env/static/private';
+import { env } from '$env/dynamic/private';
 import * as jose from 'jose'
 
 
@@ -24,7 +24,7 @@ export async function EncryptUserID(sub, expire_time, secret)
 export async function GetAuthHeader(user_id_cookie, expire_time)
 {
     const payload = jose.decodeJwt(user_id_cookie);
-    const enc_token = await EncryptUserID(payload.sub, expire_time, SHARED_JWT_SECRET);
+    const enc_token = await EncryptUserID(payload.sub, expire_time, env.SHARED_JWT_SECRET);
     return `Bearer ${enc_token}`;
 }
 

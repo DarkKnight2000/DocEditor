@@ -3,7 +3,7 @@
 </svelte:head>
 
 <script>
-    import { PUBLIC_GOOGLE_CLIENT_ID } from "$env/static/public";
+    import { env } from "$env/dynamic/public";
     import demo_gif from '$lib/assets/demo.gif';
 </script>
 
@@ -15,7 +15,7 @@
 
     <!-- Google sign in button -->
     <div id="g_id_onload"
-        data-client_id={PUBLIC_GOOGLE_CLIENT_ID}
+        data-client_id={env.PUBLIC_GOOGLE_CLIENT_ID}
         data-login_uri={`auth/callback`}>
     </div>
 

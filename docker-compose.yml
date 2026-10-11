@@ -20,10 +20,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        - INTERNAL_JWT_SECRET
-        - SHARED_JWT_SECRET
-        - PUBLIC_GOOGLE_CLIENT_ID
     # expose doesn't open the port, it is only for documentation
     expose:
       - "3000"
@@ -34,8 +30,8 @@ services:
         condition: service_healthy
     develop:
       watch:
-        # The container runs the compiled build (node build) and env vars are inlined
-        # at build time, so source changes need a rebuild, not a sync.
+        # The container runs the compiled build (node build), so source changes
+        # need a rebuild, not a sync.
         - action: rebuild
           path: ./frontend
           ignore:
@@ -71,7 +67,8 @@ services:
       - pgdata:/var/lib/postgresql
       - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-docsuser} -d ${POSTGRES_DB:-docsdb}"]
+      # $$ defers expansion to the container's shell, so it uses the env_file values
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10

@@ -1,8 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import { OAuth2Client } from 'google-auth-library';
 import { EncryptUserID } from '$lib/server/server_auth.js';
-import {INTERNAL_JWT_SECRET, SHARED_JWT_SECRET} from '$env/static/private'
-import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public'
+import { env } from '$env/dynamic/private'
+import { env as public_env } from '$env/dynamic/public'
 import { HTTP_SERVER_ADDRESS } from '$lib/server/server_creds';
 
 /**
@@ -15,10 +15,10 @@ async function authorize(token)
     let payload;
     try
     {
-        const client = new OAuth2Client(PUBLIC_GOOGLE_CLIENT_ID);
+        const client = new OAuth2Client(public_env.PUBLIC_GOOGLE_CLIENT_ID);
         const ticket = await client.verifyIdToken({
             idToken: token,
-            audience: PUBLIC_GOOGLE_CLIENT_ID,
+            audience: public_env.PUBLIC_GOOGLE_CLIENT_ID,
         });
         payload = ticket.getPayload();
     }
@@ -61,7 +61,7 @@ export async function POST({ request, cookies, url, fetch })
 
     // encrypt 'sub' before storing in cookies
     const expire_time = 60 * 60 * 24 * 7;
-    const enc_user_id = await EncryptUserID(payload.sub, expire_time, INTERNAL_JWT_SECRET);
+    const enc_user_id = await EncryptUserID(payload.sub, expire_time, env.INTERNAL_JWT_SECRET);
 
     const cookies_props = {path: "/", httpOnly: true, secure: true, maxAge: expire_time};
     cookies.set("user_id", enc_user_id, cookies_props);
@@ -71,7 +71,7 @@ export async function POST({ request, cookies, url, fetch })
     // console.log(payload.sub)
 
     // tell backend to create user
-    const shared_user_id = await EncryptUserID(payload.sub, 30, SHARED_JWT_SECRET);
+    const shared_user_id = await EncryptUserID(payload.sub, 30, env.SHARED_JWT_SECRET);
 
     try {
         const _response = await fetch(`${HTTP_SERVER_ADDRESS}/user-login`, {

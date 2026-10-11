@@ -51,11 +51,7 @@ INTERNAL_JWT_SECRET=            # Secret for internal SvelteKit, used to encrypt
 SHARED_JWT_SECRET=              # Secret shared between frontend and backend
 ```
 
-These are **build-time** values. The frontend imports them from `$env/static/*`, so Vite inlines them into the bundle during `npm run build`. The Makefile passes this file to compose with `--env-file`, compose fills the frontend build args from it, and the Dockerfile exposes them to the build as `ARG`s. Consequences:
-
-- After changing a value, rebuild the frontend image; restarting isn't enough.
-- Always build through `make` (or pass the same `--env-file` flags yourself). A plain `docker compose build` builds the frontend with empty secrets.
-- The secrets are present in the built image under `/app/build`.
+Runtime only: injected into the container by `env_file:`. The frontend reads them through `$env/dynamic/*`, so they're never inlined into the build and the image contains no secrets. After changing a value, restart the container (`docker compose up -d frontend`); no rebuild needed. With `npm run dev`, SvelteKit loads them from this file directly.
 
 ### `backend/.env`
 
@@ -78,7 +74,7 @@ POSTGRES_PASSWORD=              # Must match backend/.env
 POSTGRES_DB=                    # Must match backend/.env
 ```
 
-Injected into the container by `env_file:`. The Makefile also passes it with `--env-file` so the healthcheck's `${POSTGRES_USER}` / `${POSTGRES_DB}` in `docker-compose.yml` resolve. They're only used to create the database on first boot (empty `pgdata` volume); changing them later has no effect unless you wipe the volume (`make clean`).
+Injected into the container by `env_file:`; the healthcheck reads them from the container's environment too. They're only used to create the database on first boot (empty `pgdata` volume); changing them later has no effect unless you wipe the volume (`make clean`).
 
 ## Running Locally
 
@@ -146,7 +142,7 @@ uvicorn app.main:app --reload --port 8000
 
 ### Environment
 
-Set real values in `frontend/.env`, `backend/.env` and `postgres/postgres.env` before building. Frontend values are baked in at build time, so don't push the frontend image to a public registry.
+Set real values in `frontend/.env`, `backend/.env` and `postgres/postgres.env` before starting. All of them are runtime config, so the same images work in any environment.
 
 For production with HTTPS terminating upstream (load balancer, Cloudflare etc.), add to the Nginx `frontend` location block:
 
@@ -164,11 +160,9 @@ make rebuild
 ### Updating a single service
 
 ```bash
-docker compose --env-file frontend/.env --env-file postgres/postgres.env build frontend
-docker compose --env-file frontend/.env --env-file postgres/postgres.env up -d --no-deps frontend
+docker compose build frontend
+docker compose up -d --no-deps frontend
 ```
-
-The `--env-file` flags are required for the frontend build; without them its secrets are built in empty.
 
 `--no-deps` restarts only the target service without touching others.
 
@@ -177,12 +171,14 @@ The `--env-file` flags are required for the frontend build; without them its sec
 
 - `--env-file` on the `docker compose` command line only sets compose's interpolation context. It fills `${VAR}` inside docker-compose.yml and build `args:` listed without a value. It doesn't put anything into containers.
   - Without it, compose falls back to a `.env` file next to docker-compose.yml (none here), so `args:` end up empty.
+  - To have a shell inside the container expand a var instead of compose, escape it as `$${VAR}` (see the postgres healthcheck).
 - A service's `env_file:` / `environment:` are runtime only. They're injected into the running container, never into the image build.
   - `environment:` lists each var inline; `env_file:` loads them from a file.
 - `args:` under `build:` are passed to the Dockerfile's `ARG`s.
   - During the build, ARGs are exposed as environment variables to `RUN` commands and their child processes (e.g. `npm run build` → `vite build`).
   - They aren't kept in the final image's environment; use `ENV` for that.
-- SvelteKit's `$env/static/*` imports are inlined at build time, so they need build args. `$env/dynamic/*` are read at runtime from the container environment, so `env_file:` works for those.
+- SvelteKit's `$env/static/*` imports are inlined into the bundle at build time, so they need build args and end up in the image. `$env/dynamic/*` are read at runtime from the container environment, so `env_file:` works for those. This project uses dynamic.
+  - `$env/dynamic/public` reaches the browser through the server-rendered page, so it isn't available on prerendered pages.
 - `.dockerignore` excluding `.env*` means a `.env` file is never available inside the build.
 
 - init.sql in `/docker-entrypoint-initdb.d/` isn't a build step. The Postgres entrypoint runs it at container startup, only when the data volume is empty (first boot).
