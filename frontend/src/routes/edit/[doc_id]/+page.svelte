@@ -138,7 +138,7 @@
     </div>
 
     <!-- Editor -->
-    <Editor bind:sync_status={sync_status} doc_id={data.doc_id} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
+    <Editor bind:sync_status={sync_status} doc_id={data.doc_id} ws_token={data.ws_token} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
 </div>
 
 <!-- Collab editor dialog -->

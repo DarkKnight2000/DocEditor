@@ -29,40 +29,54 @@ Follow/Transform  - The delta required to compose with A, to make it into merge(
 
 class DocSyncer:
     def __init__(self, doc_id: str):
-        self.clients:dict[int, WebSocket] = {}
+        self.clients:dict[str, WebSocket] = {}
+        self.client_users:dict[str, str] = {}   # client id -> user id that opened it
         self.doc_id = doc_id
         # self.rev_record: list[RevNode] = []
         # self.headtext:Delta = Delta([Op(INSERT, "Hello World!")]) # current state of document
         # self.head_record_id = 0     # record ID of head
         
-    async def connect(self, user_id: str, websocket: WebSocket, db_handle: db_utils.DB_Handle):
-        if user_id not in self.clients:
-            self.clients[user_id] = websocket
+    async def connect(self, client_id: str, user_id: str, websocket: WebSocket, db_handle: db_utils.DB_Handle) -> bool:
+        """Returns False if the client id is already connected."""
+        if client_id in self.clients:
+            return False
 
-            try:
-                _, doc_content = await db_utils.get_doc_info(db_handle, self.doc_id)
-            except LookupError:
-                await websocket.send_json({'error': f'Document with ID {self.doc_id} doesnt exist!'})
-                await websocket.close()
-                return
+        try:
+            _, doc_content = await db_utils.get_doc_info(db_handle, self.doc_id)
+        except LookupError:
+            await websocket.send_json({'error': f'Document with ID {self.doc_id} doesnt exist!'})
+            return False
 
-            await websocket.send_json({
-                "type": MessageType.SERVER_INIT.value,
-                "rev": doc_content['head']['rev_id'],
-                "content": doc_content['head']['delta']
-            })
-            await db_utils.update_client_rev(db_handle, self.doc_id, user_id, doc_content['head']['rev_id'])
-        
-    async def disconnect(self, client_id, db_handle: db_utils.DB_Handle, send_disconnect = False):
-        if send_disconnect:
-            await self.clients[client_id].send_json({
-                "type": MessageType.SERVER_DROP_ACCESS.value,
-            })
-        del self.clients[client_id]
+        self.clients[client_id] = websocket
+        self.client_users[client_id] = user_id
+        await websocket.send_json({
+            "type": MessageType.SERVER_INIT.value,
+            "rev": doc_content['head']['rev_id'],
+            "content": doc_content['head']['delta']
+        })
+        await db_utils.update_client_rev(db_handle, self.doc_id, client_id, doc_content['head']['rev_id'])
+        return True
+
+    async def disconnect(self, client_id, db_handle: db_utils.DB_Handle):
+        # Safe to call more than once: the socket handler also calls it when the socket closes
+        if self.clients.pop(client_id, None) is None:
+            return
+        self.client_users.pop(client_id, None)
         await db_utils.delete_client_rev(db_handle, self.doc_id, client_id)
+
+    async def disconnect_user(self, user_id: str, db_handle: db_utils.DB_Handle):
+        """Drops every connection opened by user_id, e.g. after they're removed as a collaborator."""
+        for client_id in [c for c, u in self.client_users.items() if u == user_id]:
+            sock = self.clients[client_id]
+            await self.disconnect(client_id, db_handle)
+            try:
+                await sock.send_json({"type": MessageType.SERVER_DROP_ACCESS.value})
+                await sock.close(code=1008)
+            except Exception:
+                pass    # already closed by the client
         
     async def send_doc_rename(self, new_doc_name):
-        for csocket in self.clients.values():
+        for csocket in list(self.clients.values()):
             await csocket.send_json({
                 "type": MessageType.SERVER_DOC_RENAME.value,
                 "name": new_doc_name
@@ -104,7 +118,7 @@ class DocSyncer:
                 break
             
         
-        for cl, sock in self.clients.items():
+        for cl, sock in list(self.clients.items()):
             if cl == client_id:
                 await sock.send_json({
                     "type": MessageType.SERVER_ACK.value,

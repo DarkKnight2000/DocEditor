@@ -8,7 +8,7 @@
     import { dev } from "$app/environment";
 
     // sync status to show in nav bar
-    let { sync_status = $bindable('Waiting...'), doc_id, doc_name = $bindable(), noperm_dialog } = $props();
+    let { sync_status = $bindable('Waiting...'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
 
     const MessageTypes = {
         CLIENT_ID: 0,
@@ -40,7 +40,8 @@
         const client_id = crypto.randomUUID();
         socket.addEventListener("open", () => {
             console.log("Web socket connection created!");
-            socket.send(JSON.stringify({ type: MessageTypes.CLIENT_ID, id: client_id }));
+            // first message authenticates the socket; the server closes it if the token is invalid
+            socket.send(JSON.stringify({ type: MessageTypes.CLIENT_ID, id: client_id, token: ws_token }));
             sync_status = 'Syncing...';
         });
         socket.addEventListener("close", () => {

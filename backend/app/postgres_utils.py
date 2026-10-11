@@ -308,17 +308,21 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
     if not new_user_info:
         return False, None
 
-    if remove:
-        if new_user_info['user_id'] not in content['edit_collab']:
-            return True, new_user_info['user_id']
-        content['edit_collab'].remove(new_user_info['user_id'])
-    else:
-        if new_user_info['user_id'] in content['edit_collab']:
-            return True, new_user_info['user_id']
-        content['edit_collab'].append(new_user_info['user_id'])
+    # Edits from open sockets bump the version constantly, so re-read and retry on conflict
+    for _ in range(10):
+        if remove:
+            if new_user_info['user_id'] not in content['edit_collab']:
+                return True, new_user_info['user_id']
+            content['edit_collab'].remove(new_user_info['user_id'])
+        else:
+            if new_user_info['user_id'] in content['edit_collab']:
+                return True, new_user_info['user_id']
+            content['edit_collab'].append(new_user_info['user_id'])
 
-    success = await try_update_doc(db_handle, doc_id, content, version)
-    return success, new_user_info['user_id']
+        if await try_update_doc(db_handle, doc_id, content, version):
+            return True, new_user_info['user_id']
+        version, content = await get_doc_info(db_handle, doc_id)
+    return False, new_user_info['user_id']
 
 
 if __name__ == "__main__":

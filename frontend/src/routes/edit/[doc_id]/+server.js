@@ -2,8 +2,10 @@ import { GetAuthHeader, MakeFetchRequest } from "$lib/server/server_auth.js";
 import { HTTP_SERVER_ADDRESS } from "$lib/server/server_creds";
 
 
-export async function POST({request, cookies, url, fetch})
+export async function POST({request, locals, url, fetch})
 {
+    if(!locals.user_id) return new Response('Not logged in', {status: 401});
+
     const body = JSON.parse(await request.text()) ?? {};
     if(body.func === "rename-doc")
     {
@@ -13,7 +15,7 @@ export async function POST({request, cookies, url, fetch})
             return new Response('Body needs a "name" key', {status: 401});
         }
         const doc_id = url.pathname.split('/').at(-1);
-        const auth_header = await GetAuthHeader(cookies.get('user_id') ?? "", 30);
+        const auth_header = await GetAuthHeader(locals.user_id, 30);
         const response = await fetch(`${HTTP_SERVER_ADDRESS}/rename-doc`, {
 			method: 'POST',
 			headers: {
@@ -37,7 +39,7 @@ export async function POST({request, cookies, url, fetch})
         const doc_id = url.pathname.split('/').at(-1);
         const response = await MakeFetchRequest(
                     `${HTTP_SERVER_ADDRESS}/get-collab-info?doc_id=${doc_id}`,
-                    cookies);
+                    locals.user_id);
 
 		if(response.ok)
         {
@@ -56,7 +58,7 @@ export async function POST({request, cookies, url, fetch})
             return new Response('Body needs a "user_email" key', {status: 401});
         }
         const doc_id = url.pathname.split('/').at(-1);
-        const auth_header = await GetAuthHeader(cookies.get('user_id') ?? "", 30);
+        const auth_header = await GetAuthHeader(locals.user_id, 30);
         const response = await fetch(`${HTTP_SERVER_ADDRESS}/edit-collab`, {
 			method: 'POST',
 			headers: {

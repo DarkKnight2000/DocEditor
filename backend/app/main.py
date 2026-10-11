@@ -7,6 +7,7 @@ from typing import Annotated
 from jose import jwt, JWTError
 import os
 import json
+import asyncio
 import sys
 
 db_handle: db_utils.DB_Handle = None
@@ -40,6 +41,20 @@ def get_internal_user(authorization: Annotated[str | None, Header()]):
         return payload['sub']
     except JWTError:
         raise HTTPException(status_code=401, detail='Invalid internal token')
+
+def get_socket_user(token: str | None, doc_id: str) -> str | None:
+    """Returns the user id from an edit-socket token, or None if it's invalid or for another doc."""
+    if not isinstance(token, str):
+        return None
+    try:
+        payload = jwt.decode(token, SHARED_JWT_SECRET, algorithms=['HS256'], audience='edit-socket')
+    except JWTError:
+        return None
+    # jose skips the audience check when the claim is missing, so check it explicitly
+    # (otherwise a regular API token would also open a socket)
+    if payload.get('aud') != 'edit-socket' or payload.get('doc_id') != doc_id:
+        return None
+    return payload.get('sub')
 
 class UserInfo(BaseModel):
     name: str
@@ -98,19 +113,38 @@ active_docs: dict[str, DocSyncer] = {}
 """
 @router.websocket("/edit-socket/{doc_id}")
 async def edit_socket(websocket: WebSocket, doc_id: str):
-    
-    if not await db_utils.check_doc_exists(db_handle, doc_id):
-        await websocket.close("Document doesn't exist! Login and create a new document to start editing")
-        return
-    
     await websocket.accept()
-    my_id = None
-    doc_syncer: DocSyncer = None
-    
+
+    # The first message must be CLIENT_ID with a valid socket token for this doc
+    try:
+        data = await asyncio.wait_for(websocket.receive_json(), timeout=10)
+    except (asyncio.TimeoutError, WebSocketDisconnect, ValueError):
+        await websocket.close(code=1008)
+        return
+
+    user_id = None
+    if isinstance(data, dict) and data.get("type") == MessageType.CLIENT_ID.value:
+        user_id = get_socket_user(data.get("token"), doc_id)
+    # get_doc_info_masked is empty if the doc doesn't exist or the user is neither owner nor collaborator
+    if not user_id or not await db_utils.get_doc_info_masked(db_handle, doc_id, user_id):
+        await websocket.close(code=1008, reason="Not allowed to edit this document")
+        return
+
+    my_id = data.get("id")
+    if not isinstance(my_id, str) or not my_id:
+        await websocket.close(code=1008)
+        return
+
     if doc_id not in active_docs:
         active_docs[doc_id] = DocSyncer(doc_id)
     doc_syncer = active_docs[doc_id]
-    
+
+    if not await doc_syncer.connect(my_id, user_id, websocket, db_handle):
+        await websocket.close(code=1008)
+        if not doc_syncer.clients:
+            active_docs.pop(doc_id, None)
+        return
+
     # wait for messages on this socket
     # since it is async-await, other things are done while waiting for message from client
     # so every client has its own "green-thread"
@@ -118,23 +152,23 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
         while True:
             data = await websocket.receive_json()
             # print("Received data: ", data)
-            if data["type"] == MessageType.CLIENT_ID.value:
-                my_id = data["id"]
-                await doc_syncer.connect(my_id, websocket, db_handle)
-            elif data["type"] == MessageType.CLIENT_REV.value:
+            if data["type"] == MessageType.CLIENT_REV.value:
                 C = data["content"]
                 r_c = data["rev"]
                 await doc_syncer.add_revision(db_handle, my_id, C, r_c)
     except WebSocketDisconnect:
-        if my_id:
-            await doc_syncer.disconnect(my_id, db_handle)
-        if not len(active_docs[doc_id].clients):
+        pass
+    finally:
+        await doc_syncer.disconnect(my_id, db_handle)
+        if not doc_syncer.clients and active_docs.get(doc_id) is doc_syncer:
             del active_docs[doc_id]
     
     
 # Collaborators section
 @router.get("/get-collab-info")
 async def get_collab_info(doc_id: str, user_id: str = Depends(get_internal_user)):
+    if not await db_utils.get_doc_info_masked(db_handle, doc_id, user_id):
+        return Response('You do not have permission to access this document!', status_code=403)
     collab_info = await db_utils.get_collab_info(db_handle, doc_id, user_id)
     return Response(json.dumps(collab_info))
 
@@ -147,9 +181,9 @@ async def edit_collab(req_body: EditCollabReqBody, user_id: str = Depends(get_in
     res, collab_uid = await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op)
     if not res: return Response('failed', status_code=403)
 
-    # if removing, disconnect active connections
+    # if removing, disconnect all of that user's active connections
     if req_body.op and req_body.doc_id in active_docs:
-        await active_docs[req_body.doc_id].disconnect(collab_uid, db_handle, True)
+        await active_docs[req_body.doc_id].disconnect_user(collab_uid, db_handle)
     return Response('ok', status_code=200)
     
     

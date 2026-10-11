@@ -3,7 +3,10 @@
 declare global {
 	namespace App {
 		// interface Error {}
-		// interface Locals {}
+		interface Locals {
+			/** Verified user id from the "user_id" cookie, or null if not logged in */
+			user_id: string | null;
+		}
 		// interface PageData {}
 		// interface PageState {}
 		// interface Platform {}

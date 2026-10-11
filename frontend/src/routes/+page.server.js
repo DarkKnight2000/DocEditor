@@ -1,9 +1,9 @@
 import { redirect } from '@sveltejs/kit';
 
 /** @type {import('./$types').PageServerLoad} */
-export function load({ cookies })
+export function load({ locals })
 {
-	if(cookies.get('user_id'))
+	if(locals.user_id)
     {
         console.log('User already logged in. Redirecting...')
         redirect(303, '/myhome');

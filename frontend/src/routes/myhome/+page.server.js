@@ -5,9 +5,9 @@ import { HTTP_SERVER_ADDRESS } from '$lib/server/server_creds';
 import { redirect } from '@sveltejs/kit';
 
 // This is only on server because "cookies" can only be accessed on server
-export async function load({ cookies, fetch, url })
+export async function load({ cookies, locals, fetch, url })
 {
-	if(!cookies.get('user_id'))
+	if(!locals.user_id)
     {
         console.log('User not logged in. Redirecting to login page...')
         redirect(303, '/');
@@ -15,7 +15,7 @@ export async function load({ cookies, fetch, url })
 
 	const profile_pic = cookies.get('user_pic');
 	const user_name = cookies.get('user_name');
-	const auth_header = await GetAuthHeader(cookies.get('user_id') ?? "", 30);
+	const auth_header = await GetAuthHeader(locals.user_id, 30);
 
 	try
 	{
