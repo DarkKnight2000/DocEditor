@@ -7,12 +7,16 @@ RUN npm install
 
 COPY . .
 
-# They are private env vars. So they are not needed during build
-# They are passed through "env_file:" line in docker-compose.yml during runtime
+# Needed at build time: the app imports these from $env/static/private and
+# $env/static/public, which Vite inlines into the bundle during "npm run build".
+# Values come from compose build args, which docker-compose.yml fills from the
+# Makefile's --env-file frontend/.env (.env files are excluded by .dockerignore).
+# ARGs are exposed as env vars to RUN steps, so the build sees them.
+# Note: the inlined values end up in /app/build of the final image, and changing
+# them requires a rebuild; the runtime env_file doesn't override them.
 ARG INTERNAL_JWT_SECRET
 ARG SHARED_JWT_SECRET
 ARG PUBLIC_GOOGLE_CLIENT_ID
-# ENV PUBLIC_GOOGLE_CLIENT_ID=$PUBLIC_GOOGLE_CLIENT_ID
 
 RUN npm run build
 # CMD ["npm", "run", "preview", "--", "--port", "3000", "--host", "0.0.0.0"]

@@ -1,31 +1,36 @@
-.PHONY: build up down dev logs ps clean rebuild
+.PHONY: build up up-build down dev logs ps clean rebuild
+
+# --env-file feeds compose's interpolation context: ${VAR} in docker-compose.yml and
+# the valueless frontend build args. Every command that can build must include it,
+# otherwise the frontend is built with empty secrets.
+COMPOSE = docker compose --env-file frontend/.env --env-file postgres/postgres.env
 
 build:
 	cd backend && uv pip freeze > requirements.txt
-	docker compose --env-file frontend/.env --env-file postgres/postgres.env build
+	$(COMPOSE) build
 
 up:
-	docker compose --env-file frontend/.env --env-file postgres/postgres.env up
+	$(COMPOSE) up
 
 up-build: build up
 
 down:
-	docker compose down
+	$(COMPOSE) down
 
 dev:
-	docker compose --env-file frontend/.env --env-file postgres/postgres.env build
-	docker compose watch
+	$(COMPOSE) build
+	$(COMPOSE) watch
 
 rebuild:
-	docker compose --env-file frontend/.env --env-file postgres/postgres.env build --no-cache
-	docker compose up -d
+	$(COMPOSE) build --no-cache
+	$(COMPOSE) up -d
 
 logs:
-	docker compose logs -f
+	$(COMPOSE) logs -f
 
 ps:
-	docker compose ps
+	$(COMPOSE) ps
 
 clean:
-	docker compose down --volumes --remove-orphans
+	$(COMPOSE) down --volumes --remove-orphans
 	docker image prune -f
