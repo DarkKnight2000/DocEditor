@@ -1,6 +1,6 @@
 import { GetSocketToken, MakeFetchRequest } from "$lib/server/server_auth.js";
 import { HTTP_SERVER_ADDRESS } from "$lib/server/server_creds";
-import { redirect } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
 
 export const ssr = false;
 
@@ -41,8 +41,9 @@ export async function load({ params, cookies, locals })
     }
     catch (ex)
     {
+        // Without doc info the editor can't open; show the error page instead
         console.error("Exception caught: ", ex);
-        return {};
+        error(503, 'Could not reach the server. Please try again in a moment.');
     }
     
 }

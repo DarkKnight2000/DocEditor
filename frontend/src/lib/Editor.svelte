@@ -185,8 +185,8 @@
         </span>
         <!-- Add subscript and superscript buttons -->
         <span class="ql-formats">
-            <button class="ql-script" title="Superscript button" value="sub"></button>
-            <button class="ql-script" title="Subscript button" value="super"></button>
+            <button class="ql-script" title="Superscript button" value="super"></button>
+            <button class="ql-script" title="Subscript button" value="sub"></button>
         </span>
         <span class="ql-formats">
             <select class="ql-align">

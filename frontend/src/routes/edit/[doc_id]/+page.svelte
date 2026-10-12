@@ -12,10 +12,18 @@
     // derived state fo displaying document name
     let shown_doc_name = $derived(data.doc_name);
 
+    // last name the server accepted, restored if a rename fails or is empty
+    let saved_doc_name = data.doc_name;
+
     async function remote_rename_doc()
     {
-        // needed incase of rename error
-        let og_doc_name = $state.snapshot(shown_doc_name);
+        // innerText of the editable title can carry newlines and padding
+        const new_doc_name = (shown_doc_name ?? '').replace(/\s+/g, ' ').trim();
+        if(!new_doc_name || new_doc_name === saved_doc_name)
+        {
+            shown_doc_name = saved_doc_name;
+            return;
+        }
 
         const response = await fetch(`/edit/${data.doc_id}`,  {
             'method': 'POST',
@@ -23,18 +31,34 @@
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                name: shown_doc_name,
+                name: new_doc_name,
                 func: 'rename-doc'
             })
         });
 
         if(!response.ok)
         {
-            shown_doc_name = og_doc_name;
+            console.log('Rename failed: ', await response.text());
+            shown_doc_name = saved_doc_name;
         }
         else
         {
-            og_doc_name = shown_doc_name;
+            // the server returns the name it stored
+            saved_doc_name = await response.text();
+            shown_doc_name = saved_doc_name;
+        }
+    }
+
+    /**
+     * @param {KeyboardEvent} event
+     */
+    function title_keydown(event)
+    {
+        // Enter finishes renaming instead of adding a new line to the title
+        if(event.key === 'Enter')
+        {
+            event.preventDefault();
+            /** @type {HTMLElement} */ (event.currentTarget).blur();
         }
     }
 
@@ -134,7 +158,7 @@
 
         <!-- Nav at start -->
         <span class="text-2xl ml-10 self-center py-2 px-4"
-            contenteditable="true" bind:innerText={shown_doc_name} onblur={remote_rename_doc}>
+            contenteditable="true" bind:innerText={shown_doc_name} onblur={remote_rename_doc} onkeydown={title_keydown}>
         </span>
         <span class="text-sm text-gray-400 underline ml-5 self-center">
             {sync_status}

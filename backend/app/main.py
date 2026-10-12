@@ -82,15 +82,24 @@ async def get_doc_info(doc_id: str, user_id: str = Depends(get_internal_user)):
     return json.dumps(doc_info)
 
 
+MAX_DOC_NAME_LENGTH = 200
+
 class RenameReqBody(BaseModel):
     id: str
     name: str
 @router.post("/rename-doc")
 async def rename_doc(req_body: RenameReqBody, user_id: str = Depends(get_internal_user)):
-    if await db_utils.rename_doc(db_handle, req_body.id, req_body.name, user_id):
-        await active_docs[req_body.id].send_doc_rename(req_body.name)
-        return Response('ok', status_code=200)
-    return Response('failed', status_code=403)
+    name = ' '.join(req_body.name.split())    # collapse newlines and repeated spaces
+    if not name or len(name) > MAX_DOC_NAME_LENGTH:
+        raise HTTPException(status_code=400, detail=f'Document name must be 1 to {MAX_DOC_NAME_LENGTH} characters.')
+    try:
+        await db_utils.rename_doc(db_handle, req_body.id, name, user_id)
+    except db_utils.DocError as ex:
+        raise HTTPException(status_code=ex.status, detail=ex.message)
+    # only docs with open editors are in active_docs
+    if req_body.id in active_docs:
+        await active_docs[req_body.id].send_doc_rename(name)
+    return Response(name, status_code=200)
 
 
 active_docs: dict[str, DocSyncer] = {}
@@ -182,7 +191,7 @@ class EditCollabReqBody(BaseModel):
 async def edit_collab(req_body: EditCollabReqBody, user_id: str = Depends(get_internal_user)):
     try:
         collab_uid = await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op)
-    except db_utils.CollabError as ex:
+    except db_utils.DocError as ex:
         raise HTTPException(status_code=ex.status, detail=ex.message)
 
     # if removing, disconnect all of that user's active connections

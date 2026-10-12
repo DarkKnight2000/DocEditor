@@ -1,3 +1,4 @@
+import asyncio
 import asyncpg
 import uuid
 import os
@@ -8,11 +9,6 @@ DATETIME_FORMAT = '%Y-%m-%dT%H:%M:%S%:z'
 
 # A single asyncpg pool stands in for the old (cluster, bucket) tuple.
 type DB_Handle = asyncpg.Pool
-
-
-class CASMismatchException(Exception):
-    """Raised when an optimistic-concurrency check (version match) fails."""
-    pass
 
 
 def _to_serializable(value):
@@ -210,42 +206,42 @@ async def get_doc_info(db_handle: DB_Handle, doc_id: str):
     return version, content
 
 
+async def get_doc_owner(db_handle: DB_Handle, doc_id: str) -> str:
+    """Raises DocError(404) if the doc doesn't exist."""
+    async with db_handle.acquire() as conn:
+        owner = await conn.fetchval('SELECT owner FROM documents WHERE doc_id = $1', doc_id)
+    if owner is None:
+        raise DocError(404, 'Document not found.')
+    return owner
+
+
 async def rename_doc(db_handle: DB_Handle, doc_id: str, doc_name: str, user_id: str):
-    version, content = await get_doc_info(db_handle, doc_id)
-    if content['owner'] != user_id:
-        return False
-    content['doc_name'] = doc_name
-    # Try 5 times to rename
-    for _ in range(5):
-        try:
-            success = await try_update_doc(db_handle, doc_id, content, version)
-            if success:
-                return True
-        except CASMismatchException:
-            version, content = await get_doc_info(db_handle, doc_id)
-            if content['owner'] != user_id:
-                return False
-            content['doc_name'] = doc_name
-            continue
-    return False
+    """Raises DocError if the rename isn't allowed."""
+    if await get_doc_owner(db_handle, doc_id) != user_id:
+        raise DocError(403, 'Only the owner can rename this document.')
+    # Single-column update: atomic, and try_update_doc never writes doc_name, so no conflicts with edits
+    async with db_handle.acquire() as conn:
+        await conn.execute(
+            'UPDATE documents SET doc_name = $1 WHERE doc_id = $2',
+            doc_name, doc_id
+        )
 
 
 async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_version):
+    """Writes the sync state (clients, history, head) if the version is still old_version.
+    doc_name and edit_collab are changed by their own atomic updates and never written here,
+    so renames and collaborator changes can't conflict with edits."""
     async with db_handle.acquire() as conn:
         result = await conn.execute(
             '''
             UPDATE documents
-            SET doc_name = $1,
-                owner = $2,
-                edit_collab = $3,
-                clients = $4,
-                history = $5,
-                head = $6,
+            SET clients = $1,
+                history = $2,
+                head = $3,
                 last_edit = now(),
                 version = version + 1
-            WHERE doc_id = $7 AND version = $8
+            WHERE doc_id = $4 AND version = $5
             ''',
-            new_doc['doc_name'], new_doc['owner'], new_doc['edit_collab'],
             json.dumps(new_doc['clients']), json.dumps(new_doc['history']), json.dumps(new_doc['head']),
             doc_id, old_version
         )
@@ -299,8 +295,8 @@ async def get_collab_info(db_handle: DB_Handle, doc_id: str, user_id: str):
     return collab_info
 
 
-class CollabError(Exception):
-    """Raised by edit_collab with an HTTP status and a message that's safe to show the user."""
+class DocError(Exception):
+    """Raised with an HTTP status and a message that's safe to show the user."""
     def __init__(self, status: int, message: str):
         super().__init__(message)
         self.status = status
@@ -308,14 +304,10 @@ class CollabError(Exception):
 
 
 async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user_email: str, remove: bool = False):
-    """Returns the collaborator's user id. Raises CollabError if the change isn't allowed or fails."""
-    try:
-        version, content = await get_doc_info(db_handle, doc_id)
-    except LookupError:
-        raise CollabError(404, 'Document not found.')
-
-    if content['owner'] != req_user:
-        raise CollabError(403, 'Only the owner can change collaborators.')
+    """Returns the collaborator's user id. Raises DocError if the change isn't allowed or fails."""
+    owner = await get_doc_owner(db_handle, doc_id)
+    if owner != req_user:
+        raise DocError(403, 'Only the owner can change collaborators.')
 
     new_user_info = {}
     try:
@@ -329,25 +321,21 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
         print('Failed parsing query string, Details: ', ex)
 
     if not new_user_info:
-        raise CollabError(404, f'No account found for {new_user_email}. They need to sign in to DocEditor once before they can be added.')
-    if new_user_info['user_id'] == content['owner']:
-        raise CollabError(400, "You're the owner of this document, so you already have access.")
+        raise DocError(404, f'No account found for {new_user_email}. They need to sign in to DocEditor once before they can be added.')
+    if new_user_info['user_id'] == owner:
+        raise DocError(400, "You're the owner of this document, so you already have access.")
 
-    # Edits from open sockets bump the version constantly, so re-read and retry on conflict
-    for _ in range(10):
-        if remove:
-            if new_user_info['user_id'] not in content['edit_collab']:
-                return new_user_info['user_id']
-            content['edit_collab'].remove(new_user_info['user_id'])
-        else:
-            if new_user_info['user_id'] in content['edit_collab']:
-                return new_user_info['user_id']
-            content['edit_collab'].append(new_user_info['user_id'])
-
-        if await try_update_doc(db_handle, doc_id, content, version):
-            return new_user_info['user_id']
-        version, content = await get_doc_info(db_handle, doc_id)
-    raise CollabError(409, 'The document is busy right now. Please try again.')
+    # Atomic array update, so it can't lose a race with edits (see rename_doc)
+    query = (
+        'UPDATE documents SET edit_collab = array_remove(edit_collab, $1) '
+        'WHERE doc_id = $2 AND $1 = ANY(edit_collab)'
+    ) if remove else (
+        'UPDATE documents SET edit_collab = array_append(edit_collab, $1) '
+        'WHERE doc_id = $2 AND NOT ($1 = ANY(edit_collab))'
+    )
+    async with db_handle.acquire() as conn:
+        await conn.execute(query, new_user_info['user_id'], doc_id)
+    return new_user_info['user_id']
 
 
 if __name__ == "__main__":
