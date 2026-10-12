@@ -6,7 +6,7 @@
 CREATE TABLE IF NOT EXISTS users (
     user_id     TEXT PRIMARY KEY,
     name        TEXT NOT NULL,
-    email       TEXT NOT NULL UNIQUE
+    email       TEXT UNIQUE         -- NULL if unverified or now owned by another account
 );
 
 CREATE TABLE IF NOT EXISTS documents (

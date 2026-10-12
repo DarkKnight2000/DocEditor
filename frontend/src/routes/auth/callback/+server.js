@@ -1,4 +1,4 @@
-import { redirect } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { OAuth2Client } from 'google-auth-library';
 import { EncryptUserID } from '$lib/server/server_auth.js';
 import { env } from '$env/dynamic/private'
@@ -59,22 +59,12 @@ export async function POST({ request, cookies, url, fetch })
     if(!payload) redirect(302, "/");
     if(payload instanceof Response) return payload;
 
-    // encrypt 'sub' before storing in cookies
-    const expire_time = 60 * 60 * 24 * 7;
-    const enc_user_id = await EncryptUserID(payload.sub, expire_time, env.INTERNAL_JWT_SECRET);
-
-    const cookies_props = {path: "/", httpOnly: true, secure: true, maxAge: expire_time};
-    cookies.set("user_id", enc_user_id, cookies_props);
-    cookies.set("user_name", payload?.name ?? "", cookies_props);
-    cookies.set("user_email", payload?.email ?? "", cookies_props);
-    cookies.set("user_pic", payload?.picture ?? "", cookies_props);
-    // console.log(payload.sub)
-
-    // tell backend to create user
+    // tell backend to create/update the user first; only log in if that worked,
+    // otherwise the user would have cookies but no account (e.g. "New Doc" would fail)
     const shared_user_id = await EncryptUserID(payload.sub, 30, env.SHARED_JWT_SECRET);
-
+    let response;
     try {
-        const _response = await fetch(`${HTTP_SERVER_ADDRESS}/user-login`, {
+        response = await fetch(`${HTTP_SERVER_ADDRESS}/user-login`, {
             method: 'POST',
             headers: {
                 'Authorization': `Bearer ${shared_user_id}`,
@@ -82,15 +72,29 @@ export async function POST({ request, cookies, url, fetch })
             },
             body: JSON.stringify({
                 name: payload.name ?? "",
-                email: payload.email ?? ""
+                // collaborators are found by email, so only store it once Google has verified it
+                email: payload.email_verified ? payload.email : null
             })
         });
     }
-    catch(error) {
+    catch(ex) {
         console.log("Couldn't reach server. Is the server running? Server at", HTTP_SERVER_ADDRESS);
-        console.log("Details: ", error);
-        redirect(303, "/");
+        console.log("Details: ", ex);
     };
+    if(!response?.ok)
+    {
+        console.log('User login failed on the server:', response?.status);
+        error(502, 'Could not complete sign-in. Please try again.');
+    }
+
+    // encrypt 'sub' before storing in cookies
+    const expire_time = 60 * 60 * 24 * 7;
+    const enc_user_id = await EncryptUserID(payload.sub, expire_time, env.INTERNAL_JWT_SECRET);
+
+    const cookies_props = {path: "/", httpOnly: true, secure: true, maxAge: expire_time};
+    cookies.set("user_id", enc_user_id, cookies_props);
+    cookies.set("user_name", payload?.name ?? "", cookies_props);
+    cookies.set("user_pic", payload?.picture ?? "", cookies_props);
 
     // return to myhome page
     redirect(303, "/myhome");

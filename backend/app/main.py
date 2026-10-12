@@ -16,6 +16,7 @@ db_handle: db_utils.DB_Handle = None
 async def server_lifespan(app: FastAPI):
     global db_handle
     db_handle = await db_utils.db_connect()
+    await db_utils.migrate(db_handle)
     # if not db_handle:
     #     print('Database connection failed during server initialization')
     #     raise Exception('Database connection failed during server initialization')
@@ -58,11 +59,10 @@ def get_socket_user(token: str | None, doc_id: str) -> str | None:
 
 class UserInfo(BaseModel):
     name: str
-    email: str
+    email: str | None = None    # only sent when Google has verified it
 
 @router.post("/user-login")
 async def user_login(user_info: UserInfo, user_id: str = Depends(get_internal_user)):
-    # return upsert_user_info("", "")
     await db_utils.upsert_user_info(db_handle, user_id, user_info.name, user_info.email)
     return Response("Ok")
 

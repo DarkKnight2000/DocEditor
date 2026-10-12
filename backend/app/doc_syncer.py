@@ -132,7 +132,7 @@ class DocSyncer:
                 result['rev'], result['changes'] = next_rev_id, changes
 
             # Retries only race with writers outside this lock (rename, collaborator changes)
-            if not await db_utils.update_doc_with_retry(db_handle, self.doc_id, mutate):
+            if not await db_utils.update_doc_with_retry(db_handle, self.doc_id, mutate, edited=True):
                 raise RuntimeError(f'Could not save revision for doc {self.doc_id}')
 
             for cl, sock in list(self.clients.items()):

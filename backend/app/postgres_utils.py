@@ -30,6 +30,22 @@ def _row_to_dict(row: asyncpg.Record) -> dict:
     return _to_serializable(dict(row))
 
 
+def _is_doc_id(doc_id) -> bool:
+    """Doc ids are UUIDs; anything else can't match a doc and would make asyncpg raise."""
+    try:
+        uuid.UUID(str(doc_id))
+        return True
+    except ValueError:
+        return False
+
+
+async def migrate(db_handle: DB_Handle):
+    """Idempotent schema changes for databases created by an older init.sql."""
+    async with db_handle.acquire() as conn:
+        # email is NULL when the user's Google email isn't verified or now belongs to another account
+        await conn.execute('ALTER TABLE users ALTER COLUMN email DROP NOT NULL')
+
+
 def get_current_timestamp():
     return datetime.now(UTC).astimezone().strftime(DATETIME_FORMAT)
 
@@ -75,7 +91,7 @@ async def db_disconnect(db_handle: DB_Handle):
 # CREATE TABLE users (
 #     user_id    TEXT PRIMARY KEY,
 #     name       TEXT NOT NULL,
-#     email      TEXT NOT NULL UNIQUE
+#     email      TEXT UNIQUE
 # );
 #
 # CREATE TABLE documents (
@@ -96,16 +112,26 @@ async def db_disconnect(db_handle: DB_Handle):
 # ---------------------------------------------------------------------------
 
 
-async def upsert_user_info(db_handle: DB_Handle, user_id: str, user_name: str, user_email: str):
+async def upsert_user_info(db_handle: DB_Handle, user_id: str, user_name: str, user_email: str | None):
+    """Creates or updates the user. user_id (Google's sub) is the identity; user_email is only
+    stored when Google has verified it (None otherwise), and is used to find collaborators."""
     async with db_handle.acquire() as conn:
-        await conn.execute(
-            '''
-            INSERT INTO users (user_id, name, email)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id) DO NOTHING
-            ''',
-            user_id, user_name, user_email
-        )
+        async with conn.transaction():
+            if user_email:
+                # A Google email can move to a different account (different sub). The latest
+                # verified owner gets it, so release it from whichever user had it before.
+                await conn.execute(
+                    'UPDATE users SET email = NULL WHERE email = $1 AND user_id <> $2',
+                    user_email, user_id
+                )
+            await conn.execute(
+                '''
+                INSERT INTO users (user_id, name, email)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email
+                ''',
+                user_id, user_name, user_email
+            )
 
 
 async def get_user_docs(db_handle: DB_Handle, user_id: str):
@@ -129,6 +155,8 @@ async def get_user_docs(db_handle: DB_Handle, user_id: str):
 
 
 async def check_doc_exists(db_handle: DB_Handle, doc_id: str) -> bool:
+    if not _is_doc_id(doc_id):
+        return False
     async with db_handle.acquire() as conn:
         row = await conn.fetchrow('SELECT 1 FROM documents WHERE doc_id = $1', doc_id)
     return row is not None
@@ -167,6 +195,8 @@ async def create_new_doc(db_handle: DB_Handle, user_id: str):
 
 
 async def get_doc_info_masked(db_handle: DB_Handle, doc_id: str, user_id: str):
+    if not _is_doc_id(doc_id):
+        return {}
     async with db_handle.acquire() as conn:
         row = await conn.fetchrow(
             'SELECT doc_name, owner, edit_collab, last_edit FROM documents WHERE doc_id = $1',
@@ -183,6 +213,8 @@ async def get_doc_info_masked(db_handle: DB_Handle, doc_id: str, user_id: str):
 
 
 async def get_doc_info(db_handle: DB_Handle, doc_id: str):
+    if not _is_doc_id(doc_id):
+        raise LookupError(f'No document found with id {doc_id}')
     async with db_handle.acquire() as conn:
         row = await conn.fetchrow(
             '''
@@ -208,6 +240,8 @@ async def get_doc_info(db_handle: DB_Handle, doc_id: str):
 
 async def get_doc_owner(db_handle: DB_Handle, doc_id: str) -> str:
     """Raises DocError(404) if the doc doesn't exist."""
+    if not _is_doc_id(doc_id):
+        raise DocError(404, 'Document not found.')
     async with db_handle.acquire() as conn:
         owner = await conn.fetchval('SELECT owner FROM documents WHERE doc_id = $1', doc_id)
     if owner is None:
@@ -227,10 +261,11 @@ async def rename_doc(db_handle: DB_Handle, doc_id: str, doc_name: str, user_id: 
         )
 
 
-async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_version):
+async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_version, edited: bool = False):
     """Writes the sync state (clients, history, head) if the version is still old_version.
     doc_name and edit_collab are changed by their own atomic updates and never written here,
-    so renames and collaborator changes can't conflict with edits."""
+    so renames and collaborator changes can't conflict with edits.
+    last_edit only moves when edited is True (a content change), not when clients join or leave."""
     async with db_handle.acquire() as conn:
         result = await conn.execute(
             '''
@@ -238,25 +273,25 @@ async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_version
             SET clients = $1,
                 history = $2,
                 head = $3,
-                last_edit = now(),
+                last_edit = CASE WHEN $6 THEN now() ELSE last_edit END,
                 version = version + 1
             WHERE doc_id = $4 AND version = $5
             ''',
             json.dumps(new_doc['clients']), json.dumps(new_doc['history']), json.dumps(new_doc['head']),
-            doc_id, old_version
+            doc_id, old_version, edited
         )
     # asyncpg returns a string like "UPDATE 1" or "UPDATE 0"
     updated = result.split()[-1] == '1'
     return updated
 
 
-async def update_doc_with_retry(db_handle: DB_Handle, doc_id: str, mutate, retries: int = 10) -> bool:
+async def update_doc_with_retry(db_handle: DB_Handle, doc_id: str, mutate, retries: int = 10, edited: bool = False) -> bool:
     """Reads the doc, applies mutate(content) and writes it back, re-reading and retrying
     if another writer changed it in between. mutate must work from the content it's given."""
     for _ in range(retries):
         version, content = await get_doc_info(db_handle, doc_id)
         mutate(content)
-        if await try_update_doc(db_handle, doc_id, content, version):
+        if await try_update_doc(db_handle, doc_id, content, version, edited):
             return True
     return False
 

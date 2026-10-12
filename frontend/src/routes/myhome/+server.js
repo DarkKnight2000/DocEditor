@@ -22,7 +22,11 @@ export async function POST({ request, cookies, locals, url, fetch})
 	}
 	else if(body.func === 'logout')
 	{
-		cookies.delete('user_id', {'path': '/'});
+		// clear everything login stored (user_email is no longer set, but older sessions have it)
+		for(const name of ['user_id', 'user_name', 'user_pic', 'user_email'])
+		{
+			cookies.delete(name, {'path': '/'});
+		}
 		return new Response('ok');
 	}
     return new Response('Not allowed', {status: 404});
