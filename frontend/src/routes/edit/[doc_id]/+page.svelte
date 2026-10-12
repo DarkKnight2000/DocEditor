@@ -1,5 +1,6 @@
 <script>
     import Editor from '$lib/Editor.svelte';
+    import AppLogo from '$lib/AppLogo.svelte';
     
     import PersonAdd from '@iconify-svelte/material-symbols/group-add-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-small-outline-rounded';
@@ -157,7 +158,8 @@
     <div class="flex flex-row p-5">
 
         <!-- Nav at start -->
-        <span class="text-2xl ml-10 self-center py-2 px-4"
+        <AppLogo class="text-2xl ml-10 self-center" />
+        <span class="text-2xl ml-2 self-center py-2 px-4"
             contenteditable="true" bind:innerText={shown_doc_name} onblur={remote_rename_doc} onkeydown={title_keydown}>
         </span>
         <span class="text-sm text-gray-400 underline ml-5 self-center">

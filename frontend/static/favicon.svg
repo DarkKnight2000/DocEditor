@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>DocEditor</title>
+  <!-- bright yellow page with folded corner; the darker outline keeps its edge visible on light tab bars -->
+  <path d="M14 3h25l15 15v38a5 5 0 0 1-5 5H14a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5z" fill="#ffd60a" stroke="#e0a800" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M39 3v11a4 4 0 0 0 4 4h11z" fill="#e0a800"/>
+  <!-- lines of text -->
+  <rect x="17" y="24" width="20" height="5" rx="2.5" fill="#ffffff"/>
+  <rect x="17" y="35" width="13" height="5" rx="2.5" fill="#ffffff"/>
+  <rect x="17" y="46" width="26" height="5" rx="2.5" fill="#ffffff"/>
+  <!-- two people's cursors -->
+  <rect x="40" y="21" width="4" height="11" rx="2" fill="#2563eb"/>
+  <rect x="33" y="32" width="4" height="11" rx="2" fill="#db2777"/>
+</svg>

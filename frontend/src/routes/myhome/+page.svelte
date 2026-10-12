@@ -1,6 +1,7 @@
 <script>
     import { goto } from '$app/navigation';
     import LogoutIcon from '@iconify-svelte/material-symbols/logout-rounded';
+    import AppLogo from '$lib/AppLogo.svelte';
 
     const { data } = $props();
 
@@ -72,7 +73,7 @@
 
     <!-- Nav bar -->
     <div class="flex flex-row self-stretch items-center border-b-gray-300 border-b-2 px-5 sticky top-0 bg-white">
-        <p class="text-2xl text-gray-800 font-bold ml-30">Doc Editor</p>
+        <p class="text-2xl text-gray-800 font-bold ml-30 flex items-center gap-2 whitespace-nowrap"><AppLogo />Doc Editor</p>
         <div id="home-profile-info" class="justify-self-end ml-auto mr-10">
             <img src="{data.profile_pic}" alt="User profile pic" class="w-8 h-8 m-auto mt-2 mb-1 rounded-full"/>
             <p>{data.user_name}</p>

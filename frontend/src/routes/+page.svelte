@@ -4,11 +4,12 @@
 
 <script>
     import { env } from "$env/dynamic/public";
+    import AppLogo from "$lib/AppLogo.svelte";
 </script>
 
 <div class="flex flex-col font-nunito items-center">
 
-    <p class="text-4xl text-gray-800 font-semibold mx-20 my-10 self-start">Doc Editor</p>
+    <p class="text-4xl text-gray-800 font-semibold mx-20 my-10 self-start flex items-center gap-3 whitespace-nowrap"><AppLogo />Doc Editor</p>
     <p class="text-6xl text-gray-800 font-bold mt-10 mb-5">Collaborative Document Editing</p>
     <p class="text-2xl text-gray-800 font-medium m-1">Minimal & Open Source</p>
 
