@@ -136,6 +136,26 @@ uvicorn app.main:app --reload --port 8000
 | `make logs`       | Tail logs from all services                           |
 | `make ps`         | Show running containers                               |
 | `make clean`      | Stop containers, remove volumes and dangling images   |
+| `make test`       | Run backend and frontend tests                        |
+
+## Tests
+
+```bash
+make test
+```
+
+Needs `uv`, Node.js and `npm install` in `frontend/`. Pytest runs through `uv run --with pytest`, so it's never installed into `backend/.venv` and stays out of `requirements.txt`.
+
+- **`backend/tests/test_delta.py`**: compose/transform cases and a randomized convergence check.
+- **`backend/tests/test_delta_vs_quill.py`**: runs the same 6000 random compose/transform operations through the Python port and the real `quill-delta` (via Node) and requires identical results. The server and browsers must agree exactly, or documents drift apart. Skipped if Node or `frontend/node_modules` is missing.
+- **`backend/tests/test_doc_syncer.py`**: the real-time sync server against an in-memory database: revision numbering, transforming concurrent edits, retries, pruning, kicking collaborators, plus randomized multi-client sessions that must converge.
+- **`backend/tests/test_auth.py`**: API and edit-socket tokens.
+- **`backend/tests/test_postgres_utils.py`**: database operations (login/email handling, rename, collaborators, sync writes). These need Postgres and are skipped unless `TEST_POSTGRES_DSN` is set. They create tables in a temporary schema and drop it afterwards, so they can run against the Docker Compose database:
+  ```bash
+  cd backend
+  TEST_POSTGRES_DSN=postgresql://USER:PASSWORD@localhost:5432/DB uv run --with pytest pytest
+  ```
+- **`frontend/src/lib/sync_client.test.js`**: the browser's sync state machine (`sync_client.js`, used by `Editor.svelte`), including randomized sessions where every client's screen must match the server.
 
 
 ## Deployment

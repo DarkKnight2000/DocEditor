@@ -11,3 +11,8 @@ dependencies = [
     "couchbase>=4.6.1",
     "asyncpg>=0.31.0",
 ]
+
+[tool.pytest.ini_options]
+# run with: uv run --with pytest pytest   (pytest stays out of .venv, so requirements.txt stays clean)
+pythonpath = ["."]
+testpaths = ["tests"]

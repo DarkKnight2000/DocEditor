@@ -6,6 +6,7 @@
     import "$lib/styles/quill-editor.css";
     import { page } from "$app/state";
     import { dev } from "$app/environment";
+    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev } from "$lib/sync_client.js";
 
     // sync status to show in nav bar
     let { sync_status = $bindable('Waiting...'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
@@ -20,12 +21,7 @@
         SERVER_DROP_ACCESS: 6
     };
 
-    const ClientState = {
-        A: new Delta(),
-        X: new Delta(),
-        Y: new Delta(),
-        rev_id: 0,
-    };
+    const ClientState = createClientState();
 
 
     onMount(() => {
@@ -72,23 +68,16 @@
             if (source == "api") {
                 return;
             }
-            ClientState.Y = ClientState.Y.compose(delta);
+            applyLocalChange(ClientState, delta);
         });
 
         // event loop
         interval_id = setInterval(() => {
             if (socket.readyState !== socket.OPEN || !initialized) return;
             // have new content and received ack for previously sent content
-            if (ClientState.Y.length() !== 0 && ClientState.X.length() === 0) {
-                socket.send(
-                    JSON.stringify({
-                        type: MessageTypes.CLIENT_REV,
-                        content: ClientState.Y.ops,
-                        rev: ClientState.rev_id,
-                    }),
-                );
-                ClientState.X = ClientState.Y;
-                ClientState.Y = new Delta();
+            const outgoing = takeOutgoing(ClientState);
+            if (outgoing) {
+                socket.send(JSON.stringify({ type: MessageTypes.CLIENT_REV, ...outgoing }));
                 sync_status = 'Syncing...'
             }
         }, 500);
@@ -100,28 +89,15 @@
                 const recv_data = JSON.parse(event.data);
                 if (recv_data.type == MessageTypes.SERVER_ACK) {
                     // accepted my changes
-                    ClientState.A = ClientState.A.compose(ClientState.X);
-                    ClientState.X = new Delta();
-                    ClientState.rev_id = recv_data.rev;
+                    applyAck(ClientState, recv_data.rev);
                     sync_status = 'Saved !';
                 } else if (recv_data.type == MessageTypes.SERVER_REV) {
                     // other client changes
                     const B = new Delta(JSON.parse(recv_data.content));
-                    const An = ClientState.A.compose(B);
-                    const Xn = B.transform(ClientState.X, true);
-                    const Yn = ClientState.X.transform(B, false).transform(ClientState.Y);
-                    // Yn above puts local unsent edits (Y) first when they tie with B, so the
-                    // on-screen update must make the same choice (priority true), or the
-                    // screen drifts from what gets saved
-                    const D = ClientState.Y.transform(ClientState.X.transform(B, false), true);
-                    ClientState.A = An;
-                    ClientState.X = Xn;
-                    ClientState.Y = Yn;
-                    ClientState.rev_id = recv_data.rev;
+                    const D = applyServerRev(ClientState, B, recv_data.rev);
                     quill.updateContents(D, "api");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
-                    ClientState.rev_id = recv_data.rev;
-                    ClientState.A = new Delta((recv_data.content));
+                    applyInit(ClientState, recv_data.content, recv_data.rev);
                     quill.setContents(ClientState.A);
                     initialized = true;
                     quill.enable();

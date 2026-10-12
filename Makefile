@@ -1,4 +1,4 @@
-.PHONY: build up up-build down dev logs ps clean rebuild
+.PHONY: build up up-build down dev logs ps clean rebuild test
 
 build:
 	cd backend && uv pip freeze > requirements.txt
@@ -29,3 +29,7 @@ ps:
 clean:
 	docker compose down --volumes --remove-orphans
 	docker image prune -f
+
+test:
+	cd backend && uv run --with pytest pytest
+	cd frontend && npm test
