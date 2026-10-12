@@ -1,6 +1,6 @@
 <script>
     import { goto } from '$app/navigation';
-    import logout from '$lib/assets/logout.png'
+    import LogoutIcon from '@iconify-svelte/material-symbols/logout-rounded';
 
     const { data } = $props();
 
@@ -78,7 +78,7 @@
             <p>{data.user_name}</p>
         </div>
         <button id="home-logout" onclick={remote_logout} class="justify-self-end mr-20 hover:bg-gray-300 p-4">
-            <img src="{logout}" alt="Logout button" class="w-5 h-5 m-auto mt-2"/>
+            <LogoutIcon class="w-5 h-5 m-auto mt-2" aria-hidden="true" />
             <p class="mt-3">Logout</p>
         </button>
     </div>
@@ -120,11 +120,6 @@
                 <p class="text-sm text-gray-600 text-center mt-20">No Documents.</p>
             {/if}
         </div>
-     </div>
-
-     <!-- Footer -->
-     <div class="text-sm bg-gray-100 mt-auto py-2 self-stretch text-center underline">
-        <a href="https://www.flaticon.com/free-icons/" target="_blank" rel="noopener noreferrer" title="logout icons">Logout icons created by Freepik - Flaticon</a>
      </div>
 
 </div>

@@ -4,7 +4,6 @@
 
 <script>
     import { env } from "$env/dynamic/public";
-    import demo_gif from '$lib/assets/demo.gif';
 </script>
 
 <div class="flex flex-col font-nunito items-center">
@@ -27,8 +26,8 @@
         data-size="large"
         data-logo_alignment="right"></div>
 
-    <div class="mt-35 gap-2 flex flex-col">
-        <p class="font-bold text-xl font-nunito self-start">Demo</p>
-        <img src="{demo_gif}" class="mt-2 mh-auto max-w-md h-auto border-2 rounded-2xl" alt="Description of the animation">
-    </div>
+    <p class="text-sm text-gray-500 mt-4">
+        By signing in, you agree to the <a href="/terms" class="underline">Terms of Service</a>
+        and <a href="/privacy" class="underline">Privacy Policy</a>.
+    </p>
 </div>

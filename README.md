@@ -49,6 +49,7 @@ Copy each `*.env.example` to the matching `.env` file and fill it in. The `.env`
 PUBLIC_GOOGLE_CLIENT_ID=        # Google OAuth client ID
 INTERNAL_JWT_SECRET=            # Secret for internal SvelteKit, used to encrypt cookies data
 SHARED_JWT_SECRET=              # Secret shared between frontend and backend
+PUBLIC_CONTACT_EMAIL=           # Contact shown on /privacy and /terms (optional)
 ```
 
 Runtime only: injected into the container by `env_file:`. The frontend reads them through `$env/dynamic/*`, so they're never inlined into the build and the image contains no secrets. After changing a value, restart the container (`docker compose up -d frontend`); no rebuild needed. With `npm run dev`, SvelteKit loads them from this file directly.
@@ -171,6 +172,10 @@ proxy_set_header X-Forwarded-Proto https;
 proxy_set_header X-Forwarded-Host $http_host;
 ```
 
+### Privacy policy and terms
+
+The app serves a privacy policy at `/privacy` and terms of service at `/terms`, linked from the sign-in page. Set `PUBLIC_CONTACT_EMAIL` in `frontend/.env` so people know where to send requests, such as account deletion. Add both URLs (`https://<your domain>/privacy` and `/terms`) to the Google OAuth consent screen. They're written for a small, privately run instance; review them if you run it differently, for example if you add analytics or backups.
+
 ### Build and deploy
 
 ```bash
@@ -186,6 +191,10 @@ docker compose up -d --no-deps frontend
 
 `--no-deps` restarts only the target service without touching others.
 
+
+## License
+
+[MIT](LICENSE).
 
 ## Learning points about Docker
 
