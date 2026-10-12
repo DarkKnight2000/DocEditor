@@ -64,7 +64,9 @@
             },
             placeholder: "Start typing...",
         });
-        quill.focus();
+        // read-only until SERVER_INIT gives us the document and its revision
+        let initialized = false;
+        quill.disable();
 
         quill.on("text-change", (delta, _, source) => {
             if (source == "api") {
@@ -75,7 +77,7 @@
 
         // event loop
         interval_id = setInterval(() => {
-            if (socket.readyState !== socket.OPEN) return;
+            if (socket.readyState !== socket.OPEN || !initialized) return;
             // have new content and received ack for previously sent content
             if (ClientState.Y.length() !== 0 && ClientState.X.length() === 0) {
                 socket.send(
@@ -108,7 +110,10 @@
                     const An = ClientState.A.compose(B);
                     const Xn = B.transform(ClientState.X, true);
                     const Yn = ClientState.X.transform(B, false).transform(ClientState.Y);
-                    const D = ClientState.Y.transform(ClientState.X.transform(B, false));
+                    // Yn above puts local unsent edits (Y) first when they tie with B, so the
+                    // on-screen update must make the same choice (priority true), or the
+                    // screen drifts from what gets saved
+                    const D = ClientState.Y.transform(ClientState.X.transform(B, false), true);
                     ClientState.A = An;
                     ClientState.X = Xn;
                     ClientState.Y = Yn;
@@ -118,6 +123,9 @@
                     ClientState.rev_id = recv_data.rev;
                     ClientState.A = new Delta((recv_data.content));
                     quill.setContents(ClientState.A);
+                    initialized = true;
+                    quill.enable();
+                    quill.focus();
                     sync_status = 'Saved !';
                 } else if (recv_data.type == MessageTypes.SERVER_DOC_RENAME) {
                     // rename state variable in parent

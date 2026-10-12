@@ -44,6 +44,8 @@
      */
     let collabs_info = $state([]);
     let input_collab_email = $state('');
+    // error message shown in the collab dialog, empty when there's nothing to show
+    let collab_error = $state('');
     /**
      * @type {HTMLDialogElement}
      */
@@ -66,7 +68,11 @@
             console.log('cinf2o', text);
             collabs_info = text ? JSON.parse(text): [];
         }
-        if(!collab_dialog_element.open) collab_dialog_element.showModal();
+        if(!collab_dialog_element.open)
+        {
+            collab_error = '';
+            collab_dialog_element.showModal();
+        }
     }
 
     /**
@@ -75,8 +81,13 @@
      */
     async function edit_collab(user_email, is_remove)
     {
-        if(!user_email || user_email.length === 0 || !user_email.includes("@")) return;
+        if(!user_email || user_email.length === 0 || !user_email.includes("@"))
+        {
+            collab_error = 'Enter a valid email address.';
+            return;
+        }
 
+        collab_error = '';
         const response = await fetch(`/edit/${data.doc_id}`,  {
             'method': 'POST',
             headers: {
@@ -92,6 +103,10 @@
         {
             input_collab_email = "";
             display_collabs();
+        }
+        else
+        {
+            collab_error = (await response.text()) || 'Could not update collaborators.';
         }
     }
 
@@ -146,10 +161,14 @@
     <div class="py-10 px-20 flex flex-col gap-8">
         <p class="font-semibold text-lg">Edit Collaborators</p>
         <div>
-            <input class="px-5 py-3 rounded-lg border-2 border-gray-500 text-xl" bind:value="{input_collab_email}">
+            <input class="px-5 py-3 rounded-lg border-2 border-gray-500 text-xl" bind:value="{input_collab_email}"
+                oninput={() => collab_error = ''}>
             <button class="ml-4 p-4 bg-blue-400 rounded-xl cursor-pointer" onclick={() => edit_collab(input_collab_email, false)}>
                 <SinglePersonAdd class='w-4 h-4 text-white'/>
             </button>
+            {#if collab_error}
+                <p class="mt-3 max-w-sm text-sm text-red-600" role="alert">{collab_error}</p>
+            {/if}
         </div>
         <div class="flex flex-col gap-6 self-stretch items-center">
             {#each collabs_info as cuser_info}

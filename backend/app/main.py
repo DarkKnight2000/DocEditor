@@ -155,6 +155,8 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
             if data["type"] == MessageType.CLIENT_REV.value:
                 C = data["content"]
                 r_c = data["rev"]
+                if not isinstance(C, list) or not isinstance(r_c, int) or isinstance(r_c, bool):
+                    break
                 await doc_syncer.add_revision(db_handle, my_id, C, r_c)
     except WebSocketDisconnect:
         pass
@@ -178,8 +180,10 @@ class EditCollabReqBody(BaseModel):
     op: bool
 @router.post("/edit-collab")
 async def edit_collab(req_body: EditCollabReqBody, user_id: str = Depends(get_internal_user)):
-    res, collab_uid = await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op)
-    if not res: return Response('failed', status_code=403)
+    try:
+        collab_uid = await db_utils.edit_collab(db_handle, req_body.doc_id, user_id, req_body.user_email, req_body.op)
+    except db_utils.CollabError as ex:
+        raise HTTPException(status_code=ex.status, detail=ex.message)
 
     # if removing, disconnect all of that user's active connections
     if req_body.op and req_body.doc_id in active_docs:

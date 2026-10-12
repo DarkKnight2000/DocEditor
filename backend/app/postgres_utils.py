@@ -254,24 +254,35 @@ async def try_update_doc(db_handle: DB_Handle, doc_id: str, new_doc, old_version
     return updated
 
 
-async def update_client_rev(db_handle: DB_Handle, doc_id: str, user_id: str, rev_id: str):
-    version, content = await get_doc_info(db_handle, doc_id)
-    content['clients'][user_id] = rev_id
+async def update_doc_with_retry(db_handle: DB_Handle, doc_id: str, mutate, retries: int = 10) -> bool:
+    """Reads the doc, applies mutate(content) and writes it back, re-reading and retrying
+    if another writer changed it in between. mutate must work from the content it's given."""
+    for _ in range(retries):
+        version, content = await get_doc_info(db_handle, doc_id)
+        mutate(content)
+        if await try_update_doc(db_handle, doc_id, content, version):
+            return True
+    return False
 
-    # delete old history behind all clients
-    min_rev_id = min(content['clients'].values()) if len(content['clients']) else content['head']['rev_id']
-    content['history'] = [i for i in content['history'] if i['rev_id'] >= min_rev_id]
-    return await try_update_doc(db_handle, doc_id, content, version)
+
+def prune_history(content):
+    """Drops history records that every connected client has already seen."""
+    min_rev_id = min(content['clients'].values()) if content['clients'] else content['head']['rev_id']
+    content['history'] = [i for i in content['history'] if i['rev_id'] > min_rev_id]
 
 
-async def delete_client_rev(db_handle: DB_Handle, doc_id: str, user_id: str):
-    version, content = await get_doc_info(db_handle, doc_id)
-    del content['clients'][user_id]
+async def update_client_rev(db_handle: DB_Handle, doc_id: str, client_id: str, rev_id: int):
+    def mutate(content):
+        content['clients'][client_id] = rev_id
+        prune_history(content)
+    return await update_doc_with_retry(db_handle, doc_id, mutate)
 
-    # delete old history behind all clients
-    min_rev_id = min(content['clients'].values()) if len(content['clients']) else content['head']['rev_id']
-    content['history'] = [i for i in content['history'] if i['rev_id'] >= min_rev_id]
-    return await try_update_doc(db_handle, doc_id, content, version)
+
+async def delete_client_rev(db_handle: DB_Handle, doc_id: str, client_id: str):
+    def mutate(content):
+        content['clients'].pop(client_id, None)
+        prune_history(content)
+    return await update_doc_with_retry(db_handle, doc_id, mutate)
 
 
 async def get_collab_info(db_handle: DB_Handle, doc_id: str, user_id: str):
@@ -288,11 +299,23 @@ async def get_collab_info(db_handle: DB_Handle, doc_id: str, user_id: str):
     return collab_info
 
 
+class CollabError(Exception):
+    """Raised by edit_collab with an HTTP status and a message that's safe to show the user."""
+    def __init__(self, status: int, message: str):
+        super().__init__(message)
+        self.status = status
+        self.message = message
+
+
 async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user_email: str, remove: bool = False):
-    version, content = await get_doc_info(db_handle, doc_id)
+    """Returns the collaborator's user id. Raises CollabError if the change isn't allowed or fails."""
+    try:
+        version, content = await get_doc_info(db_handle, doc_id)
+    except LookupError:
+        raise CollabError(404, 'Document not found.')
 
     if content['owner'] != req_user:
-        return False, None
+        raise CollabError(403, 'Only the owner can change collaborators.')
 
     new_user_info = {}
     try:
@@ -306,23 +329,25 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
         print('Failed parsing query string, Details: ', ex)
 
     if not new_user_info:
-        return False, None
+        raise CollabError(404, f'No account found for {new_user_email}. They need to sign in to DocEditor once before they can be added.')
+    if new_user_info['user_id'] == content['owner']:
+        raise CollabError(400, "You're the owner of this document, so you already have access.")
 
     # Edits from open sockets bump the version constantly, so re-read and retry on conflict
     for _ in range(10):
         if remove:
             if new_user_info['user_id'] not in content['edit_collab']:
-                return True, new_user_info['user_id']
+                return new_user_info['user_id']
             content['edit_collab'].remove(new_user_info['user_id'])
         else:
             if new_user_info['user_id'] in content['edit_collab']:
-                return True, new_user_info['user_id']
+                return new_user_info['user_id']
             content['edit_collab'].append(new_user_info['user_id'])
 
         if await try_update_doc(db_handle, doc_id, content, version):
-            return True, new_user_info['user_id']
+            return new_user_info['user_id']
         version, content = await get_doc_info(db_handle, doc_id)
-    return False, new_user_info['user_id']
+    raise CollabError(409, 'The document is busy right now. Please try again.')
 
 
 if __name__ == "__main__":

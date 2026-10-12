@@ -73,7 +73,11 @@ export async function POST({request, locals, url, fetch})
 		});
 
 		if(response.ok) return new Response(await response.text(), {status: 200});
-		else return new Response('Rename failed', {status: 401});
+
+        // pass the backend's reason ({"detail": "..."}) and status through to the page
+        let message = 'Could not update collaborators.';
+        try { message = (await response.json()).detail ?? message; } catch {}
+        return new Response(message, {status: response.status});
     }
     return new Response('Not allowed', {status: 404});
 }

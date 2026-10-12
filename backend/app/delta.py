@@ -146,7 +146,8 @@ def compose(A, B):
                 b_attrs = None
                 if ATTRIBUTES in a_op: a_attrs = a_op[ATTRIBUTES]
                 if ATTRIBUTES in b_op: b_attrs = b_op[ATTRIBUTES]
-                new_attrs = compose_attrs(a_attrs, b_attrs)
+                # like Quill: keep null (remove-format) attributes when composing onto a retain
+                new_attrs = compose_attrs(a_attrs, b_attrs, RETAIN in a_op and isinstance(a_op[RETAIN], (float, int)))
                 if new_attrs: newOp[ATTRIBUTES] = new_attrs
                 # print('pushing other retain or self retain/insert')
                 push(ret_delta, newOp)
@@ -196,7 +197,21 @@ def getEmbedTypeAndData(a_op: dict, b_op: dict):
     
     return embedType, a_op[embedType], b_op[embedType]
 
-def transform(A, B):
+def transform_attrs(a_attrs: dict, b_attrs: dict, priority: bool):
+    # Port of Quill's AttributeMap.transform: with priority, A's attributes win,
+    # so keep only the keys of B that A didn't touch
+    if not isinstance(a_attrs, dict):
+        return b_attrs
+    if not isinstance(b_attrs, dict):
+        return None
+    if not priority:
+        return b_attrs
+    ret_attrs = {k: v for k, v in b_attrs.items() if k not in a_attrs}
+    return ret_attrs or None
+
+def transform(A, B, priority=False):
+    """Port of Quill's Delta.transform: returns B rewritten to apply after A.
+    priority=True means A happened first (its inserts go before B's at the same position)."""
     priority = True if priority else False
     if isinstance(B, (float, int)):
         return transformPosition(A, B, priority)
@@ -221,9 +236,10 @@ def transform(A, B):
                 transformedData = length if isinstance(otherData, (float, int)) else otherData
                 # if not isinstance(thisData, (float, int)) and not isinstance(otherData, (float, int)):
                 #     # compose embed data, skipping for now
-                a_attrs = thisOp[ATTRIBUTES] if ATTRIBUTES in thisOp else {}
-                b_attrs = otherOp[ATTRIBUTES] if ATTRIBUTES in otherOp else {}
-                push(ret_delta, {RETAIN: transformedData, ATTRIBUTES: compose_attrs(a_attrs, b_attrs, priority)})
+                new_op = {RETAIN: transformedData}
+                new_attrs = transform_attrs(thisOp.get(ATTRIBUTES), otherOp.get(ATTRIBUTES), priority)
+                if new_attrs: new_op[ATTRIBUTES] = new_attrs
+                push(ret_delta, new_op)
                 
     return chop(ret_delta)
     
