@@ -25,8 +25,9 @@
         <p class="text-3xl sm:text-4xl font-extrabold flex items-center gap-2 sm:gap-3 whitespace-nowrap"><AppLogo />Raya</p>
     </header>
 
-    <!-- Fills the space between header and footer and centres its content -->
-    <main class="flex-1 flex flex-col items-center justify-center px-6 pb-10 text-center">
+    <!-- Fills the space between header and footer and centres its content.
+         Phones have no room left to centre in, so the top padding keeps the heading off the header. -->
+    <main class="flex-1 flex flex-col items-center justify-center px-6 pt-10 sm:pt-0 pb-10 text-center">
         <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight">
             Collaborative <span class="highlight">Document editor</span>
         </h1>
