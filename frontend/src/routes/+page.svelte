@@ -21,16 +21,16 @@
 
 <div class="min-h-screen flex flex-col font-nunito text-gray-800">
 
-    <header class="px-8 md:px-20 py-8">
-        <p class="text-4xl font-extrabold flex items-center gap-3 whitespace-nowrap"><AppLogo />Raya</p>
+    <header class="px-6 md:px-20 py-6 sm:py-8">
+        <p class="text-3xl sm:text-4xl font-extrabold flex items-center gap-2 sm:gap-3 whitespace-nowrap"><AppLogo />Raya</p>
     </header>
 
     <!-- Fills the space between header and footer and centres its content -->
     <main class="flex-1 flex flex-col items-center justify-center px-6 pb-10 text-center">
-        <h1 class="text-5xl md:text-6xl font-bold leading-tight">
+        <h1 class="text-4xl sm:text-5xl md:text-6xl font-bold leading-tight">
             Collaborative <span class="highlight">Document editor</span>
         </h1>
-        <p class="text-2xl font-medium mt-4 text-gray-600">Minimal & Open source</p>
+        <p class="text-xl sm:text-2xl font-medium mt-4 text-gray-600">Minimal & Open source</p>
 
         <!-- Google sign in button -->
         <div id="g_id_onload"
@@ -51,7 +51,7 @@
             and <a href="/privacy" class="underline">Privacy Policy</a>.
         </p>
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-10 mt-20 max-w-3xl">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10 mt-12 sm:mt-20 max-w-3xl">
             {#each features as feature}
                 <div class="flex flex-col items-center gap-2">
                     <div class="w-12 h-12 rounded-full bg-yellow-100 text-yellow-700 flex items-center justify-center">

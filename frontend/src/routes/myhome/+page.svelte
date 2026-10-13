@@ -134,7 +134,7 @@
 <div class="min-h-screen flex flex-col font-nunito text-gray-800 bg-white">
 
     <!-- Header: same layout as the sign-in page -->
-    <header class="px-8 md:px-20 py-6 flex items-center justify-between gap-6 border-b border-gray-200">
+    <header class="px-6 md:px-20 py-6 flex items-center justify-between gap-6 border-b border-gray-200">
         <p class="text-2xl sm:text-3xl font-extrabold flex items-center gap-2 sm:gap-3 whitespace-nowrap"><AppLogo />Raya</p>
         <div class="flex items-center gap-5">
             <div class="flex items-center gap-3 min-w-0">
@@ -207,7 +207,7 @@
                         </a>
                         {#if each_doc.is_owner}
                             <button
-                                class="absolute top-4 right-4 p-1.5 rounded-full text-gray-300 group-hover:text-gray-400 hover:!text-red-600 hover:bg-red-50 cursor-pointer"
+                                class="absolute top-4 right-4 p-1.5 rounded-full text-gray-400 sm:text-gray-300 sm:group-hover:text-gray-400 hover:!text-red-600 hover:bg-red-50 cursor-pointer"
                                 aria-label="Delete {display_name(each_doc.doc_name)}" title="Delete document"
                                 onclick={() => confirm_delete(each_doc)}>
                                 <DeleteIcon class="w-5 h-5" aria-hidden="true" />

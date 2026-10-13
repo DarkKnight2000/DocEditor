@@ -64,6 +64,28 @@
     @apply font-nunito text-sm rounded-md pl-2 pr-1 py-1 w-28 cursor-pointer outline-none bg-white border border-transparent hover:border-gray-200 focus:border-yellow-400;
 }
 
+/* outline toggle: in the toolbar below laptop width (wider screens have a button beside the page) */
+.ql-snow.ql-toolbar button.outline-toggle {
+    @apply flex items-center justify-center text-gray-500;
+}
+
+.ql-snow.ql-toolbar button.outline-toggle[aria-pressed="true"] {
+    @apply bg-yellow-100 text-gray-900;
+}
+
+@media (min-width: 1024px) {
+    .ql-snow.ql-toolbar button.outline-toggle {
+        display: none;
+    }
+}
+
+/* the character count moves out of the toolbar on phones (see the badge in Editor.svelte) */
+@media (max-width: 639px) {
+    .ql-toolbar.ql-snow .ql-formats.char-counter {
+        display: none;
+    }
+}
+
 .text-style-picker option {
     @apply bg-white text-gray-900;
 }
