@@ -17,6 +17,8 @@ class FakeDB:
         self.conflicts_to_inject = 0
         monkeypatch.setattr(db_utils, 'get_doc_info', self.get_doc_info)
         monkeypatch.setattr(db_utils, 'try_update_doc', self.try_update_doc)
+        monkeypatch.setattr(db_utils, 'get_doc_owner_type', self.get_doc_owner_type)
+        self.owner_types = {}     # doc_id -> 'guest' | 'known'; guest when not set
 
     def add_doc(self, doc_id='doc', text='', rev=0):
         head = {'rev_id': rev, 'delta': [{'insert': text}] if text else []}
@@ -24,6 +26,9 @@ class FakeDB:
                              'clients': {}, 'history': [], 'head': head,
                              'last_edit': 0, 'version': 0}
         return doc_id
+
+    async def get_doc_owner_type(self, db_handle, doc_id):
+        return self.owner_types.get(doc_id, 'guest')
 
     async def get_doc_info(self, db_handle, doc_id):
         if doc_id not in self.docs:

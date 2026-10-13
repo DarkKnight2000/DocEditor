@@ -6,11 +6,13 @@ import random
 import pytest
 
 import app.delta as D
-from app.doc_syncer import DocSyncer, MessageType
+import app.doc_syncer as doc_syncer
+from app.doc_syncer import DocSyncer, MessageType, text_length
 from tests.fakes import FakeDB, FakeSocket, SimClient, normalize, random_edit, text_of
 
-INIT, ACK, REV, DROP = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
-                        MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value)
+INIT, ACK, REV, DROP, LIMIT = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
+                               MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value,
+                               MessageType.SERVER_DOC_LIMIT.value)
 
 
 def run(coro):
@@ -34,7 +36,8 @@ def test_connect_sends_document_and_registers_client(db):
     async def scenario():
         syncer = DocSyncer('doc')
         sock = await join(syncer, 'c1')
-        assert sock.sent == [{'type': INIT, 'rev': 4, 'content': [{'insert': 'hello'}]}]
+        assert sock.sent == [{'type': INIT, 'rev': 4, 'content': [{'insert': 'hello'}],
+                              'max_chars': doc_syncer.MAX_DOC_CHARS}]
         assert db.docs['doc']['clients'] == {'c1': 4}
     run(scenario())
 
@@ -162,6 +165,22 @@ def test_disconnect_user_drops_only_that_users_connections(db):
     run(scenario())
 
 
+def test_deleted_document_drops_every_connection_without_touching_the_db(db):
+    db.add_doc()
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        tabs = [await join(syncer, 'tab1', 'owner'), await join(syncer, 'tab2', 'collab')]
+        del db.docs['doc']                              # the row is already gone
+        await syncer.drop_everyone()
+        for sock in tabs:
+            assert sock.of_type(DROP) == [{'type': DROP, 'reason': 'deleted'}]
+            assert sock.closed_with == 1008
+        assert syncer.clients == {} and syncer.client_users == {}
+        await syncer.disconnect('tab1', None)           # the socket handler's cleanup must not fail
+    run(scenario())
+
+
 def test_broken_peer_socket_does_not_break_the_sender(db):
     db.add_doc()
 
@@ -186,6 +205,89 @@ def test_only_edits_change_last_edit(db):
         assert db.docs['doc']['last_edit'] == 0      # opening/closing isn't an edit
         await syncer.add_revision(None, 'a', [{'insert': 'hi'}], 0)
         assert db.docs['doc']['last_edit'] == 1
+    run(scenario())
+
+
+# --- document length limit -----------------------------------------------------
+
+def test_text_length_ignores_quills_trailing_newline():
+    assert text_length([]) == 0
+    assert text_length([{'insert': 'hello\n'}]) == 5
+    assert text_length([{'insert': 'a\nb'}]) == 3
+    assert text_length([{'insert': 'hi', 'attributes': {'bold': True}}, {'insert': '\n'}]) == 2
+
+
+def test_edit_reaching_the_limit_is_accepted(db, monkeypatch):
+    monkeypatch.setattr(doc_syncer, 'MAX_DOC_CHARS', 10)
+    db.add_doc(text='12345\n')
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a = await join(syncer, 'a')
+        await syncer.add_revision(None, 'a', [{'insert': '67890'}], 0)    # exactly 10
+        assert a.of_type(ACK) and not a.of_type(LIMIT)
+        assert text_length(db.docs['doc']['head']['delta']) == 10
+    run(scenario())
+
+
+def test_edit_growing_past_the_limit_is_refused_and_not_broadcast(db, monkeypatch):
+    monkeypatch.setattr(doc_syncer, 'MAX_DOC_CHARS', 10)
+    db.add_doc(text='12345\n')
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a, b = await join(syncer, 'a'), await join(syncer, 'b')
+        writes_before = db.writes
+        await syncer.add_revision(None, 'a', [{'insert': '678901'}], 0)   # would be 11
+        assert a.of_type(LIMIT) == [{'type': LIMIT, 'max_chars': 10}]
+        assert not a.of_type(ACK) and not b.of_type(REV)
+        assert db.text() == '12345\n' and db.writes == writes_before
+    run(scenario())
+
+
+def test_concurrent_edits_cannot_add_up_past_the_limit(db, monkeypatch):
+    monkeypatch.setattr(doc_syncer, 'MAX_DOC_CHARS', 10)
+    db.add_doc(text='12345\n')
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a, b = await join(syncer, 'a'), await join(syncer, 'b')
+        # each edit is fine on its own (5 + 4 = 9), but not together (13)
+        await syncer.add_revision(None, 'a', [{'insert': 'aaaa'}], 0)
+        await syncer.add_revision(None, 'b', [{'insert': 'bbbb'}], 0)
+        assert a.of_type(ACK) and b.of_type(LIMIT)
+        assert db.text() == 'aaaa12345\n'
+    run(scenario())
+
+
+def test_document_over_the_limit_can_still_be_shortened(db, monkeypatch):
+    monkeypatch.setattr(doc_syncer, 'MAX_DOC_CHARS', 10)
+    db.add_doc(text='0123456789abcdef\n')       # 16, e.g. created before the limit existed
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a = await join(syncer, 'a')
+        await syncer.add_revision(None, 'a', [{'delete': 3}], 0)
+        await syncer.add_revision(None, 'a', [{'retain': 2, 'attributes': {'bold': True}}], 1)   # same length
+        assert len(a.of_type(ACK)) == 2 and not a.of_type(LIMIT)
+        await syncer.add_revision(None, 'a', [{'insert': 'x'}], 2)                               # grows
+        assert a.of_type(LIMIT)
+        assert text_length(db.docs['doc']['head']['delta']) == 13
+    run(scenario())
+
+
+def test_documents_of_known_owners_have_no_size_limit(db, monkeypatch):
+    monkeypatch.setattr(doc_syncer, 'MAX_DOC_CHARS', 10)
+    db.add_doc(text='12345\n')
+    db.owner_types['doc'] = 'known'
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a = await join(syncer, 'a')                     # e.g. a guest collaborator
+        assert a.sent[0]['max_chars'] is None
+        await syncer.add_revision(None, 'a', [{'insert': 'x' * 50}], 0)
+        assert a.of_type(ACK) and not a.of_type(LIMIT)
+        assert text_length(db.docs['doc']['head']['delta']) == 55
     run(scenario())
 
 

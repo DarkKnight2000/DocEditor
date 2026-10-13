@@ -8,7 +8,7 @@
 
 <LegalPage title="Privacy Policy" updated="October 13, 2026">
     <p>
-        This site runs DocEditor, an open-source collaborative document editor
+        This site runs Raya, an open-source collaborative document editor
         (<a href="https://github.com/DarkKnight2000/DocEditor" target="_blank" rel="noopener noreferrer">source code</a>).
         It is a small, privately run service. This policy explains what information the site collects
         when you use it and what happens to it. "We" means the person who runs this site.
@@ -38,7 +38,7 @@
         and to investigate problems.</p>
 
     <h2>How we use it</h2>
-    <p>Only to run DocEditor:</p>
+    <p>Only to run Raya:</p>
     <ul>
         <li>to sign you in and keep you signed in;</li>
         <li>to show you your documents;</li>
@@ -72,10 +72,12 @@
         automatically once they're no longer needed for syncing. Server logs are kept only for a limited time.</p>
 
     <h2>Your choices</h2>
-    <p>You can ask us to show you the information we hold about you, correct it, or delete your account.
+    <p>You can delete documents you own at any time from your documents page. Deleting a document removes it
+        for everyone it's shared with, and it can't be recovered.</p>
+    <p>You can also ask us to show you the information we hold about you, correct it, or delete your account.
         Deleting your account deletes the documents you own, including for the people you shared them with,
         and removes you from documents other people shared with you.
-        The app doesn't have a delete button yet, so contact us using the details below.</p>
+        The app doesn't have an account delete option yet, so contact us using the details below.</p>
 
     <h2>Security</h2>
     <p>Sign-in tokens are signed so they can't be forged, and only the owner and collaborators of a document can
@@ -83,7 +85,7 @@
         it for highly sensitive information.</p>
 
     <h2>Children</h2>
-    <p>DocEditor isn't intended for children under 13, or the minimum age required to have a Google account
+    <p>Raya isn't intended for children under 13, or the minimum age required to have a Google account
         where you live.</p>
 
     <h2>Changes</h2>

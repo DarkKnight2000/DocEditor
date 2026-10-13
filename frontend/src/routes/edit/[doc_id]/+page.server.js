@@ -8,7 +8,6 @@ export async function load({ params, cookies, locals })
 {
     if(!locals.user_id)
     {
-        console.log('User not logged in. Redirecting to login page...')
         redirect(303, '/');
     }
 
@@ -19,7 +18,6 @@ export async function load({ params, cookies, locals })
             locals.user_id)
         if(response.ok)
         {
-            console.log('Success')
             const doc_info = JSON.parse(await response.json());
             return {
                 'doc_id': params.doc_id,
@@ -30,7 +28,6 @@ export async function load({ params, cookies, locals })
         }
         else
         {
-            console.log('Error response from server: ', response.status);
             return {
                 'doc_name': '--:--',
                 'doc_id': params.doc_id,

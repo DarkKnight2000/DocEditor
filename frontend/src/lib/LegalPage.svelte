@@ -4,11 +4,11 @@
 </script>
 
 <svelte:head>
-    <title>{title} · DocEditor</title>
+    <title>{title} · Raya</title>
 </svelte:head>
 
 <div class="font-nunito text-gray-800 max-w-3xl mx-auto px-6 py-12 leading-relaxed legal">
-    <a href="/" class="text-blue-600 underline text-sm">← DocEditor</a>
+    <a href="/" class="text-blue-600 underline text-sm">← <span class="font-extrabold">Raya</span></a>
     <h1 class="text-4xl font-bold mt-6">{title}</h1>
     <p class="text-sm text-gray-500 mt-2 mb-8">Last updated: {updated}</p>
     {@render children()}

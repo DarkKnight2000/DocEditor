@@ -1,8 +1,8 @@
-# DocEditor
+# Raya
 
 A real-time collaborative document editor. Multiple users can edit the same document simultaneously with changes synced live via WebSockets.
 
-![DocEditor demo](./frontend/src/lib/assets/demo.gif)
+![Raya demo](./frontend/src/lib/assets/demo.gif)
 
 ## Stack
 
@@ -63,6 +63,8 @@ POSTGRES_USER=
 POSTGRES_PASSWORD=
 POSTGRES_DB=
 SHARED_JWT_SECRET=              # Must match frontend
+MAX_DOCS_PER_USER=2             # Optional: documents each guest account can own (shared docs don't count)
+MAX_DOC_CHARS=2000              # Optional: characters per document owned by a guest
 ```
 
 Runtime only: injected into the container by `env_file:` and read with `os.environ`.
@@ -170,6 +172,14 @@ For production with HTTPS terminating upstream (load balancer, Cloudflare etc.),
 ```nginx
 proxy_set_header X-Forwarded-Proto https;
 proxy_set_header X-Forwarded-Host $http_host;
+```
+
+### User types
+
+Every account starts as a `guest`, limited to `MAX_DOCS_PER_USER` documents of up to `MAX_DOC_CHARS` characters each. `known` accounts have no limits. The character limit follows the document's owner, so a known user's documents are unlimited for everyone editing them. To mark someone as known:
+
+```bash
+docker compose exec postgres psql -U <POSTGRES_USER> -d <POSTGRES_DB> -c "UPDATE users SET user_type = 'known' WHERE email = 'someone@example.com';"
 ```
 
 ### Privacy policy and terms

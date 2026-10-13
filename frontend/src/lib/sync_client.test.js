@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Delta from 'quill-delta';
-import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev } from './sync_client.js';
+import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit } from './sync_client.js';
 
 /** Document the client should be showing */
 const docOf = (/** @type {any} */ s) => s.A.compose(s.X).compose(s.Y);
@@ -63,6 +63,15 @@ test('takeOutgoing sends local changes once, and waits for the acknowledgement',
     assert.equal(s.rev_id, 4);
     sameDoc(s.A, new Delta().insert('hi!'));
     assert.deepEqual(takeOutgoing(s)?.rev, 4, 'queued change goes out after the ack');
+});
+
+test('exceedsCharLimit refuses only growth past the limit', () => {
+    assert.equal(exceedsCharLimit(1999, 2000, 2000), false, 'reaching the limit is fine');
+    assert.equal(exceedsCharLimit(2000, 2001, 2000), true, 'going over is refused');
+    assert.equal(exceedsCharLimit(1500, 2500, 2000), true, 'a big paste is refused');
+    assert.equal(exceedsCharLimit(2500, 2400, 2000), false, 'an over-limit document can be shortened');
+    assert.equal(exceedsCharLimit(2500, 2500, 2000), false, 'formatting an over-limit document is fine');
+    assert.equal(exceedsCharLimit(10, 99999, Infinity), false, 'no limit before SERVER_INIT');
 });
 
 test('applyInit replaces the document and revision', () => {

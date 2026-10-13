@@ -12,6 +12,8 @@
     let sync_status = $state('');
     // derived state fo displaying document name
     let shown_doc_name = $derived(data.doc_name);
+    // browser tab shows the document name; falls back to the app name when there is none to show
+    let tab_title = $derived(data.hidden ? 'Raya' : ((shown_doc_name ?? '').replace(/\s+/g, ' ').trim() || 'Raya'));
 
     // last name the server accepted, restored if a rename fails or is empty
     let saved_doc_name = data.doc_name;
@@ -90,7 +92,6 @@
         if(response.ok)
         {
             const text = await response.text();
-            console.log('cinf2o', text);
             collabs_info = text ? JSON.parse(text): [];
         }
         if(!collab_dialog_element.open)
@@ -139,17 +140,27 @@
      * @type {HTMLDialogElement}
      */
     let noperm_dialog_element;
-    function no_perm_dialog()
+    // why the editor was closed: "deleted" when the owner deleted the document, otherwise no access
+    let perm_reason = $state('');
+
+    /**
+     * @param {string} [reason]
+     */
+    function no_perm_dialog(reason = '')
     {
+        perm_reason = reason;
         if(!noperm_dialog_element.open) noperm_dialog_element.showModal();
     }
     
     $effect(() => {
-        console.log(`User changed doc name to ${shown_doc_name}`);
         if(data.hidden) no_perm_dialog();
     });
 
 </script>
+
+<svelte:head>
+    <title>{tab_title}</title>
+</svelte:head>
 
 <!-- Whole page -->
 <div class="h-screen font-nunito flex flex-col items-stretch">
@@ -218,7 +229,13 @@
 <!-- No permission dialog -->
 <dialog  id="no-perm-dialog" class="m-auto rounded-2xl" closedby='none' bind:this={noperm_dialog_element}>
     <div class="py-10 px-20 flex flex-col gap-8 font-nunito">
-        <p class="font-semibold text-2xl text-center">You do not have permission to edit this document</p>
-        <p class="text-sm text-center">If you know the owner of this document, you can request them for access.</p>
+        {#if perm_reason === 'deleted'}
+            <p class="font-semibold text-2xl text-center">This document was deleted</p>
+            <p class="text-sm text-center">The owner deleted it, so it can't be edited any more.</p>
+        {:else}
+            <p class="font-semibold text-2xl text-center">You do not have permission to edit this document</p>
+            <p class="text-sm text-center">If you know the owner of this document, you can request them for access.</p>
+        {/if}
+        <a href="/myhome" class="text-center text-blue-600 underline">Go to my documents</a>
     </div>
 </dialog>

@@ -145,7 +145,7 @@ async def make_doc(pool):
     owner, collab = uid(), uid()
     await db_utils.upsert_user_info(pool, owner, 'Owner', f'{owner}@test')
     await db_utils.upsert_user_info(pool, collab, 'Collab', f'{collab}@test')
-    doc = await db_utils.create_new_doc(pool, owner)
+    doc = await db_utils.create_new_doc(pool, owner, max_docs=10)
     return owner, collab, doc
 
 
@@ -246,6 +246,119 @@ def test_malformed_ids_are_treated_as_missing_docs(with_pool):
         assert not await db_utils.check_doc_exists(pool, 'not-a-uuid')
         with pytest.raises(LookupError):
             await db_utils.get_doc_info(pool, 'not-a-uuid')
+    with_pool(body)
+
+
+@needs_db
+def test_document_limit_counts_only_owned_documents(with_pool):
+    async def body(pool):
+        owner, collab, shared_doc = await make_doc(pool)
+        await db_utils.edit_collab(pool, shared_doc, owner, f'{collab}@test')
+        # the shared document doesn't count against collab's own limit
+        await db_utils.create_new_doc(pool, collab, max_docs=2)
+        await db_utils.create_new_doc(pool, collab, max_docs=2)
+        with pytest.raises(db_utils.DocError) as err:
+            await db_utils.create_new_doc(pool, collab, max_docs=2)
+        assert err.value.status == 403 and 'up to 2 documents' in err.value.message
+    with_pool(body)
+
+
+@needs_db
+def test_new_users_are_guests_and_login_keeps_the_type(with_pool):
+    async def body(pool):
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'New', None)
+        assert await db_utils.get_user_type(pool, user) == 'guest'
+        async with pool.acquire() as conn:
+            await conn.execute("UPDATE users SET user_type = 'known' WHERE user_id = $1", user)
+        await db_utils.upsert_user_info(pool, user, 'New name', f'{user}@test')   # signing in again
+        assert await db_utils.get_user_type(pool, user) == 'known'
+        assert await db_utils.get_user_type(pool, 'nobody') == 'guest'
+    with_pool(body)
+
+
+@needs_db
+def test_known_users_have_no_document_limit(with_pool):
+    async def body(pool):
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'Known', None)
+        async with pool.acquire() as conn:
+            await conn.execute("UPDATE users SET user_type = 'known' WHERE user_id = $1", user)
+        docs = [await db_utils.create_new_doc(pool, user, max_docs=2) for _ in range(4)]
+        assert len(docs) == 4
+        assert await db_utils.get_doc_owner_type(pool, docs[0]) == 'known'
+    with_pool(body)
+
+
+@needs_db
+def test_user_type_must_be_guest_or_known(with_pool):
+    async def body(pool):
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'U', None)
+        async with pool.acquire() as conn:
+            with pytest.raises(asyncpg.exceptions.CheckViolationError):
+                await conn.execute("UPDATE users SET user_type = 'admin' WHERE user_id = $1", user)
+    with_pool(body)
+
+
+@needs_db
+def test_document_limit_holds_for_simultaneous_creates(with_pool):
+    async def body(pool):
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'Fast clicker', None)
+        results = await asyncio.gather(*(db_utils.create_new_doc(pool, user, max_docs=2) for _ in range(6)),
+                                       return_exceptions=True)
+        created = [r for r in results if isinstance(r, str)]
+        assert len(created) == 2
+        assert all(isinstance(r, db_utils.DocError) for r in results if not isinstance(r, str))
+    with_pool(body)
+
+
+@needs_db
+def test_owner_can_delete_and_frees_a_slot(with_pool):
+    async def body(pool):
+        owner, collab, doc = await make_doc(pool)
+        await db_utils.edit_collab(pool, doc, owner, f'{collab}@test')
+        await db_utils.delete_doc(pool, doc, owner)
+        assert not await db_utils.check_doc_exists(pool, doc)
+        assert await db_utils.get_user_docs(pool, collab) == []     # gone for collaborators too
+        # deleting frees space under the limit
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'U', None)
+        first = await db_utils.create_new_doc(pool, user, max_docs=1)
+        await db_utils.delete_doc(pool, first, user)
+        await db_utils.create_new_doc(pool, user, max_docs=1)
+    with_pool(body)
+
+
+@needs_db
+@pytest.mark.parametrize('case,status', [
+    ('collaborator', 403),
+    ('missing', 404),
+    ('malformed', 404),
+])
+def test_delete_errors(with_pool, case, status):
+    async def body(pool):
+        owner, collab, doc = await make_doc(pool)
+        await db_utils.edit_collab(pool, doc, owner, f'{collab}@test')
+        target, who = {'collaborator': (doc, collab), 'missing': (str(uuid.uuid4()), owner),
+                       'malformed': ('not-a-uuid', owner)}[case]
+        with pytest.raises(db_utils.DocError) as err:
+            await db_utils.delete_doc(pool, target, who)
+        assert err.value.status == status
+        assert await db_utils.check_doc_exists(pool, doc)          # nothing was deleted
+    with_pool(body)
+
+
+@needs_db
+def test_user_docs_say_which_docs_are_owned_and_how_widely_shared(with_pool):
+    async def body(pool):
+        owner, collab, doc = await make_doc(pool)
+        await db_utils.edit_collab(pool, doc, owner, f'{collab}@test')
+        [as_owner] = await db_utils.get_user_docs(pool, owner)
+        [as_collab] = await db_utils.get_user_docs(pool, collab)
+        assert (as_owner['is_owner'], as_owner['shared_with']) == (True, 1)
+        assert as_collab['is_owner'] is False
     with_pool(body)
 
 

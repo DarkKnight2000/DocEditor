@@ -9,7 +9,6 @@ export async function load({ cookies, locals, fetch, url })
 {
 	if(!locals.user_id)
     {
-        console.log('User not logged in. Redirecting to login page...')
         redirect(303, '/');
     }
 
@@ -19,20 +18,16 @@ export async function load({ cookies, locals, fetch, url })
 
 	try
 	{
-		const response = await fetch(`${HTTP_SERVER_ADDRESS}/get-user-docs`, {
-			method: 'GET',
-			headers: {
-				'Authorization': auth_header
-			}
-		});
-		console.log('finished request');
-		const resp = await response.json();
-		console.log("docs info", resp);
-		const docs_info = JSON.parse(resp);
-		// console.log(docs_info);
+		const [response, limits_response] = await Promise.all([
+			fetch(`${HTTP_SERVER_ADDRESS}/get-user-docs`, { headers: { 'Authorization': auth_header } }),
+			fetch(`${HTTP_SERVER_ADDRESS}/limits`, { headers: { 'Authorization': auth_header } }),
+		]);
+		const docs_info = JSON.parse(await response.json());
+		// the limits line is optional, the page works without it
+		const limits = limits_response.ok ? await limits_response.json() : null;
 
 		return {
-			profile_pic, user_name, docs_info
+			profile_pic, user_name, docs_info, limits
 		};
 	}
 	catch(ex)

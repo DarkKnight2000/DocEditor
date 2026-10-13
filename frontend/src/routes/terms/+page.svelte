@@ -8,12 +8,12 @@
 
 <LegalPage title="Terms of Service" updated="October 13, 2026">
     <p>
-        These terms apply to your use of DocEditor on this site. This is a small service run privately by
+        These terms apply to your use of Raya on this site. This is a small service run privately by
         an individual ("we"), not a company. By signing in, you agree to these terms and to the
         <a href="/privacy">Privacy Policy</a>.
     </p>
 
-    <h2>Using DocEditor</h2>
+    <h2>Using Raya</h2>
     <ul>
         <li>You need a Google account to sign in, and must be at least 13, or the minimum age required to have
             a Google account where you live.</li>
@@ -33,7 +33,7 @@
     </ul>
 
     <h2>Acceptable use</h2>
-    <p>Don't use DocEditor to:</p>
+    <p>Don't use Raya to:</p>
     <ul>
         <li>break the law or infringe anyone else's rights;</li>
         <li>store or share malware, or content that is abusive, harassing or exploits anyone;</li>
@@ -45,7 +45,7 @@
 
     <h2>No guarantees: keep your own copies</h2>
     <p>
-        DocEditor is provided free and "as is". We don't promise that it will always be available, error-free or
+        Raya is provided free and "as is". We don't promise that it will always be available, error-free or
         secure, or that your documents will never be lost. The service may change, be interrupted or shut down at
         any time. <strong>Keep your own copy of anything important.</strong>
     </p>
@@ -53,19 +53,19 @@
     <h2>Liability</h2>
     <p>
         To the extent the law allows, we aren't liable for any loss or damage from using or being unable to use
-        DocEditor, including lost data. Nothing in these terms limits liability that can't be limited by law.
+        Raya, including lost data. Nothing in these terms limits liability that can't be limited by law.
     </p>
 
     <h2>Ending your use</h2>
     <p>
-        You can stop using DocEditor at any time and ask us to delete your account, as described in the
+        You can stop using Raya at any time and ask us to delete your account, as described in the
         <a href="/privacy">Privacy Policy</a>. We may suspend or end your access, especially if these terms are
         broken, and will try to give notice where reasonable.
     </p>
 
     <h2>Open source</h2>
     <p>
-        DocEditor's source code is available under the MIT License on
+        Raya's source code is available under the MIT License on
         <a href="https://github.com/DarkKnight2000/DocEditor" target="_blank" rel="noopener noreferrer">GitHub</a>.
         That license covers the code. These terms cover your use of this hosted site.
     </p>
@@ -73,7 +73,7 @@
     <h2>Changes</h2>
     <p>
         We may update these terms. The new version will be posted here with a new "Last updated" date.
-        Continuing to use DocEditor after a change means you accept the updated terms.
+        Continuing to use Raya after a change means you accept the updated terms.
     </p>
 
     <h2>Contact</h2>

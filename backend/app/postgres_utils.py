@@ -44,6 +44,11 @@ async def migrate(db_handle: DB_Handle):
     async with db_handle.acquire() as conn:
         # email is NULL when the user's Google email isn't verified or now belongs to another account
         await conn.execute('ALTER TABLE users ALTER COLUMN email DROP NOT NULL')
+        # 'guest' accounts have document and size limits, 'known' accounts don't; everyone starts as a guest
+        await conn.execute(
+            "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'guest' "
+            "CHECK (user_type IN ('guest', 'known'))"
+        )
 
 
 def get_current_timestamp():
@@ -140,7 +145,8 @@ async def get_user_docs(db_handle: DB_Handle, user_id: str):
         async with db_handle.acquire() as conn:
             rows = await conn.fetch(
                 '''
-                SELECT ds.doc_id AS doc_id, ds.doc_name, u.name AS owner_name, ds.last_edit
+                SELECT ds.doc_id AS doc_id, ds.doc_name, u.name AS owner_name, ds.last_edit,
+                       ds.owner = $1 AS is_owner, cardinality(ds.edit_collab) AS shared_with
                 FROM documents ds
                 JOIN users u ON u.user_id = ds.owner
                 WHERE ds.owner = $1 OR $1 = ANY(ds.edit_collab)
@@ -179,9 +185,37 @@ doc_id:
 '''
 
 
-async def create_new_doc(db_handle: DB_Handle, user_id: str):
-    doc_id = str(uuid.uuid4())
+async def get_user_type(db_handle: DB_Handle, user_id: str) -> str:
+    """'guest' (limited) or 'known' (unlimited); unknown users count as guests"""
     async with db_handle.acquire() as conn:
+        user_type = await conn.fetchval('SELECT user_type FROM users WHERE user_id = $1', user_id)
+    return user_type or 'guest'
+
+
+async def get_doc_owner_type(db_handle: DB_Handle, doc_id: str) -> str:
+    """User type of the document's owner, which decides the document's size limit"""
+    if not _is_doc_id(doc_id):
+        return 'guest'
+    async with db_handle.acquire() as conn:
+        user_type = await conn.fetchval(
+            'SELECT u.user_type FROM documents d JOIN users u ON u.user_id = d.owner WHERE d.doc_id = $1',
+            doc_id
+        )
+    return user_type or 'guest'
+
+
+async def create_new_doc(db_handle: DB_Handle, user_id: str, max_docs: int):
+    """Raises DocError if a guest user already owns max_docs documents (shared docs don't count).
+    Known users have no limit."""
+    doc_id = str(uuid.uuid4())
+    async with db_handle.acquire() as conn, conn.transaction():
+        # Serialize creates per user, so two quick requests can't both pass the count check
+        await conn.execute('SELECT pg_advisory_xact_lock(hashtext($1))', user_id)
+        user_type = await conn.fetchval('SELECT user_type FROM users WHERE user_id = $1', user_id)
+        if user_type != 'known':
+            owned = await conn.fetchval('SELECT count(*) FROM documents WHERE owner = $1', user_id)
+            if owned >= max_docs:
+                raise DocError(403, f'You can have up to {max_docs} documents. Delete one to create a new one.')
         await conn.execute(
             '''
             INSERT INTO documents
@@ -247,6 +281,14 @@ async def get_doc_owner(db_handle: DB_Handle, doc_id: str) -> str:
     if owner is None:
         raise DocError(404, 'Document not found.')
     return owner
+
+
+async def delete_doc(db_handle: DB_Handle, doc_id: str, user_id: str):
+    """Deletes the document for everyone. Raises DocError unless user_id owns it."""
+    if await get_doc_owner(db_handle, doc_id) != user_id:
+        raise DocError(403, 'Only the owner can delete this document.')
+    async with db_handle.acquire() as conn:
+        await conn.execute('DELETE FROM documents WHERE doc_id = $1 AND owner = $2', doc_id, user_id)
 
 
 async def rename_doc(db_handle: DB_Handle, doc_id: str, doc_name: str, user_id: str):
@@ -356,7 +398,7 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
         print('Failed parsing query string, Details: ', ex)
 
     if not new_user_info:
-        raise DocError(404, f'No account found for {new_user_email}. They need to sign in to DocEditor once before they can be added.')
+        raise DocError(404, f'No account found for {new_user_email}. They need to sign in to Raya once before they can be added.')
     if new_user_info['user_id'] == owner:
         raise DocError(400, "You're the owner of this document, so you already have access.")
 
@@ -371,28 +413,3 @@ async def edit_collab(db_handle: DB_Handle, doc_id: str, req_user: str, new_user
     async with db_handle.acquire() as conn:
         await conn.execute(query, new_user_info['user_id'], doc_id)
     return new_user_info['user_id']
-
-
-if __name__ == "__main__":
-    import asyncio
-    import dotenv
-    dotenv.load_dotenv()
-
-    async def _main():
-        pool = await db_connect()
-        async with pool.acquire() as conn:
-            rows = await conn.fetch(
-                '''
-                UPDATE documents
-                SET last_edit = now()
-                RETURNING doc_id, last_edit
-                '''
-            )
-            for row in rows:
-                print(dict(row))
-
-        docs = await get_user_docs(pool, "109476422127426141073")
-        print(docs)
-        await db_disconnect(pool)
-
-    asyncio.run(_main())

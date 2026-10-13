@@ -6,7 +6,7 @@
     import "$lib/styles/quill-editor.css";
     import { page } from "$app/state";
     import { dev } from "$app/environment";
-    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev } from "$lib/sync_client.js";
+    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit } from "$lib/sync_client.js";
 
     // sync status to show in nav bar
     let { sync_status = $bindable('Waiting...'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
@@ -18,10 +18,23 @@
         SERVER_ACK: 3,
         SERVER_INIT: 4,
         SERVER_DOC_RENAME: 5,
-        SERVER_DROP_ACCESS: 6
+        SERVER_DROP_ACCESS: 6,
+        SERVER_DOC_LIMIT: 7
     };
 
     const ClientState = createClientState();
+
+    // document length limit, sent by the server in SERVER_INIT
+    let max_chars = $state(Infinity);
+    let char_count = $state(0);
+    let limit_hit = $state(false);
+    let limit_hit_timer = -1;
+    function flash_limit()
+    {
+        limit_hit = true;
+        clearTimeout(limit_hit_timer);
+        limit_hit_timer = setTimeout(() => limit_hit = false, 2500);
+    }
 
 
     onMount(() => {
@@ -35,13 +48,11 @@
         const socket = new WebSocket(`${ws_server_address}/edit-socket/${doc_id}`);
         const client_id = crypto.randomUUID();
         socket.addEventListener("open", () => {
-            console.log("Web socket connection created!");
             // first message authenticates the socket; the server closes it if the token is invalid
             socket.send(JSON.stringify({ type: MessageTypes.CLIENT_ID, id: client_id, token: ws_token }));
             sync_status = 'Syncing...';
         });
         socket.addEventListener("close", () => {
-            console.log("Web socket connection closed!");
             sync_status = 'Offline !';
         });
         socket.addEventListener("error", (err) => {
@@ -64,10 +75,26 @@
         let initialized = false;
         quill.disable();
 
-        quill.on("text-change", (delta, _, source) => {
+        // characters typed, not counting the newline Quill always keeps at the end
+        const text_length = () => quill.getLength() - 1;
+
+        quill.on("text-change", (delta, oldContents, source) => {
             if (source == "api") {
+                char_count = text_length();
                 return;
             }
+            const old_length = oldContents.length() - 1;
+            if (exceedsCharLimit(old_length, text_length(), max_chars)) {
+                // Undo the edit as a normal user change, so Quill's undo history and the sync state
+                // record both the edit and its reversal (they cancel out) and stay consistent
+                applyLocalChange(ClientState, delta);
+                quill.updateContents(delta.invert(oldContents), "user");
+                const at = typeof delta.ops[0]?.retain === "number" ? delta.ops[0].retain : 0;
+                quill.setSelection(Math.min(at, text_length()), 0, "silent");
+                flash_limit();
+                return;
+            }
+            char_count = text_length();
             applyLocalChange(ClientState, delta);
         });
 
@@ -84,7 +111,6 @@
 
         // receive content from server
         socket.addEventListener("message", (event) => {
-            // console.log("Got message from server:", event);
             try {
                 const recv_data = JSON.parse(event.data);
                 if (recv_data.type == MessageTypes.SERVER_ACK) {
@@ -98,7 +124,9 @@
                     quill.updateContents(D, "api");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
                     applyInit(ClientState, recv_data.content, recv_data.rev);
+                    max_chars = recv_data.max_chars ?? Infinity;
                     quill.setContents(ClientState.A);
+                    char_count = text_length();
                     initialized = true;
                     quill.enable();
                     quill.focus();
@@ -107,14 +135,20 @@
                     // rename state variable in parent
                     doc_name = recv_data.name;
                 } else if (recv_data.type == MessageTypes.SERVER_DROP_ACCESS) {
-                    // rename state variable in parent
-                    noperm_dialog();
+                    // removed as a collaborator, or "deleted" when the owner deleted the document
+                    noperm_dialog(recv_data.reason);
+                } else if (recv_data.type == MessageTypes.SERVER_DOC_LIMIT) {
+                    // Edits from several people together went over the limit and the server refused
+                    // this one. Reload to get back in sync with the saved document.
+                    flash_limit();
+                    sync_status = 'Document is full, reloading...';
+                    quill.disable();
+                    setTimeout(() => location.reload(), 2000);
                 } else {
-                    console.log("No type: ", recv_data);
+                    console.warn("Unknown message from server: ", recv_data);
                 }
             } catch (error) {
-                console.error("Error parsing JSON:", error);
-                console.log("Received data was:", event.data);
+                console.error("Error handling message from server:", error, event.data);
                 sync_status = 'Error saving!';
             }
         });
@@ -182,6 +216,12 @@
             <button class="ql-background" title="Clean button" value="super"></button> -->
             <button class="ql-clean" title="Clean button" value="super"></button>
         </span>
+        {#if max_chars !== Infinity}
+            <span class="ql-formats text-xs {limit_hit ? 'text-red-600 font-bold' : 'text-gray-400'}"
+                title="Documents can have up to {max_chars} characters">
+                {char_count} / {max_chars}{limit_hit ? ' (limit reached)' : ''}
+            </span>
+        {/if}
     </div>
     <div class="bg-gray-100 px-20 xl:px-40 2xl:px-80 py-10 flex-1 border-t-gray-800">
         <div

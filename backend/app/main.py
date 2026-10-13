@@ -1,6 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, HTTPException, Depends, APIRouter
 from contextlib import asynccontextmanager
-from app.doc_syncer import DocSyncer, MessageType
+from app.doc_syncer import DocSyncer, MessageType, MAX_DOC_CHARS
 from pydantic import BaseModel
 import app.postgres_utils as db_utils
 from typing import Annotated
@@ -17,9 +17,6 @@ async def server_lifespan(app: FastAPI):
     global db_handle
     db_handle = await db_utils.db_connect()
     await db_utils.migrate(db_handle)
-    # if not db_handle:
-    #     print('Database connection failed during server initialization')
-    #     raise Exception('Database connection failed during server initialization')
     yield
     await db_utils.db_disconnect(db_handle)
 
@@ -33,12 +30,12 @@ async def root():
 
 
 SHARED_JWT_SECRET = os.environ['SHARED_JWT_SECRET']
+# Per-account limits; self-hosted copies can raise them through the environment
+MAX_DOCS_PER_USER = int(os.environ.get('MAX_DOCS_PER_USER', 2))
 def get_internal_user(authorization: Annotated[str | None, Header()]):
-    # print(authorization)
     try:
         token = authorization.removeprefix("Bearer ").strip()
         payload = jwt.decode(token, SHARED_JWT_SECRET, algorithms=['HS256'])
-        # print(payload)
         return payload['sub']
     except JWTError:
         raise HTTPException(status_code=401, detail='Invalid internal token')
@@ -70,9 +67,20 @@ async def user_login(user_info: UserInfo, user_id: str = Depends(get_internal_us
 async def get_user_docs(user_id: str = Depends(get_internal_user)):
     return json.dumps(await db_utils.get_user_docs(db_handle, user_id))
 
+@router.get("/limits")
+async def limits(user_id: str = Depends(get_internal_user)):
+    # shown on the documents page; known users have no limits
+    if await db_utils.get_user_type(db_handle, user_id) == 'known':
+        return {'user_type': 'known', 'max_docs': None, 'max_chars': None}
+    return {'user_type': 'guest', 'max_docs': MAX_DOCS_PER_USER, 'max_chars': MAX_DOC_CHARS}
+
 @router.post("/create-new-doc")
 async def create_new_doc(user_id: str = Depends(get_internal_user)):
-    return json.dumps({'doc_id': await db_utils.create_new_doc(db_handle, user_id)})
+    try:
+        doc_id = await db_utils.create_new_doc(db_handle, user_id, MAX_DOCS_PER_USER)
+    except db_utils.DocError as ex:
+        raise HTTPException(status_code=ex.status, detail=ex.message)
+    return json.dumps({'doc_id': doc_id})
 
 @router.get("/get-doc-info")
 async def get_doc_info(doc_id: str, user_id: str = Depends(get_internal_user)):
@@ -83,6 +91,21 @@ async def get_doc_info(doc_id: str, user_id: str = Depends(get_internal_user)):
 
 
 MAX_DOC_NAME_LENGTH = 200
+
+class DeleteReqBody(BaseModel):
+    id: str
+@router.post("/delete-doc")
+async def delete_doc(req_body: DeleteReqBody, user_id: str = Depends(get_internal_user)):
+    try:
+        await db_utils.delete_doc(db_handle, req_body.id, user_id)
+    except db_utils.DocError as ex:
+        raise HTTPException(status_code=ex.status, detail=ex.message)
+    # anyone with the document open is told it was deleted and disconnected
+    doc_syncer = active_docs.pop(req_body.id, None)
+    if doc_syncer:
+        await doc_syncer.drop_everyone()
+    return Response('ok', status_code=200)
+
 
 class RenameReqBody(BaseModel):
     id: str
@@ -160,7 +183,6 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
     try:
         while True:
             data = await websocket.receive_json()
-            # print("Received data: ", data)
             if data["type"] == MessageType.CLIENT_REV.value:
                 C = data["content"]
                 r_c = data["rev"]

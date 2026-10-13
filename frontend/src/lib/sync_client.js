@@ -19,6 +19,19 @@ export function createClientState()
 }
 
 /**
+ * Whether a change that takes the document from oldLength to newLength characters must be refused.
+ * Only growth past the limit is refused, so a document that's already too long can still be shortened.
+ * backend/app/doc_syncer.py applies the same rule.
+ * @param {number} oldLength
+ * @param {number} newLength
+ * @param {number} maxChars
+ */
+export function exceedsCharLimit(oldLength, newLength, maxChars)
+{
+    return newLength > maxChars && newLength > oldLength;
+}
+
+/**
  * SERVER_INIT: the full document at revision rev
  * @param {ReturnType<typeof createClientState>} state
  * @param {any[]} content

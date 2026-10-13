@@ -5,7 +5,6 @@ export function load({ locals })
 {
 	if(locals.user_id)
     {
-        console.log('User already logged in. Redirecting...')
         redirect(303, '/myhome');
     }
 }

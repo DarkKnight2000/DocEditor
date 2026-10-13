@@ -3,6 +3,7 @@ from enum import Enum
 import asyncio
 import copy
 import json
+import os
 from fastapi import WebSocket
 import app.postgres_utils as db_utils
 import app.delta as delta
@@ -16,6 +17,23 @@ class MessageType(Enum):
     
     SERVER_DOC_RENAME = 5
     SERVER_DROP_ACCESS = 6 # Client removed as a collaborator
+    SERVER_DOC_LIMIT = 7   # Client's change was rejected: document would exceed its size limit
+
+# Maximum length in characters of documents owned by guest users ('known' owners have no limit);
+# self-hosted copies can raise it through the environment
+MAX_DOC_CHARS = int(os.environ.get('MAX_DOC_CHARS', 2000))
+
+
+def text_length(doc) -> int:
+    """Characters in a document, not counting the newline Quill keeps at the end"""
+    length = delta.length(doc)
+    if doc and isinstance(doc[-1].get('insert'), str) and doc[-1]['insert'].endswith('\n'):
+        length -= 1
+    return length
+
+
+class DocTooLong(Exception):
+    pass
 
 """
 Compose - Add one after another
@@ -38,6 +56,8 @@ class DocSyncer:
         # SERVER_INIT and then every later revision exactly once and in order.
         # Fine because active_docs lives in a single backend process.
         self.lock = asyncio.Lock()
+        # size limit for this document, or None for no limit; refreshed whenever a client connects
+        self.max_chars = MAX_DOC_CHARS
 
     async def _send(self, websocket: WebSocket, message: dict):
         # A peer that just disconnected must not break the sender; its own handler cleans it up
@@ -64,12 +84,17 @@ class DocSyncer:
             if not await db_utils.update_client_rev(db_handle, self.doc_id, client_id, head['rev_id']):
                 return False
 
+            # the owner's type decides the limit for everyone editing this document
+            owner_type = await db_utils.get_doc_owner_type(db_handle, self.doc_id)
+            self.max_chars = None if owner_type == 'known' else MAX_DOC_CHARS
+
             self.clients[client_id] = websocket
             self.client_users[client_id] = user_id
             await websocket.send_json({
                 "type": MessageType.SERVER_INIT.value,
                 "rev": head['rev_id'],
-                "content": head['delta']
+                "content": head['delta'],
+                "max_chars": self.max_chars
             })
             return True
 
@@ -94,6 +119,20 @@ class DocSyncer:
             except Exception:
                 pass    # already closed by the client
         
+    async def drop_everyone(self):
+        """Closes every connection after the document was deleted. The document row is gone,
+        so unlike disconnect() this doesn't touch the database."""
+        async with self.lock:
+            sockets = list(self.clients.values())
+            self.clients.clear()
+            self.client_users.clear()
+        for sock in sockets:
+            try:
+                await sock.send_json({"type": MessageType.SERVER_DROP_ACCESS.value, "reason": "deleted"})
+                await sock.close(code=1008)
+            except Exception:
+                pass    # already closed by the client
+
     async def send_doc_rename(self, new_doc_name):
         for csocket in list(self.clients.values()):
             await self._send(csocket, {
@@ -121,18 +160,33 @@ class DocSyncer:
                     if record['rev_id'] > reference_id:
                         changes = delta.transform(record['delta'], changes, True)
 
+                new_doc = delta.compose(content['head']['delta'], changes)
+                # Browsers stop edits past the limit, but concurrent edits can still add up past it.
+                # Only growth is refused, so a document that's already too long can be shortened.
+                if self.max_chars is not None:
+                    new_length = text_length(new_doc)
+                    if new_length > self.max_chars and new_length > text_length(content['head']['delta']):
+                        raise DocTooLong()
+
                 next_rev_id = head_rev + 1
                 content['clients'][client_id] = next_rev_id
                 history.append({'rev_id': next_rev_id, 'delta': changes})
-                content['head'] = {
-                    'rev_id': next_rev_id,
-                    'delta': delta.compose(content['head']['delta'], changes)
-                }
+                content['head'] = {'rev_id': next_rev_id, 'delta': new_doc}
                 db_utils.prune_history(content)
                 result['rev'], result['changes'] = next_rev_id, changes
 
             # Retries only race with writers outside this lock (rename, collaborator changes)
-            if not await db_utils.update_doc_with_retry(db_handle, self.doc_id, mutate, edited=True):
+            try:
+                saved = await db_utils.update_doc_with_retry(db_handle, self.doc_id, mutate, edited=True)
+            except DocTooLong:
+                # Nothing was saved or broadcast; the sender reloads the document to get back in sync
+                if client_id in self.clients:
+                    await self._send(self.clients[client_id], {
+                        "type": MessageType.SERVER_DOC_LIMIT.value,
+                        "max_chars": self.max_chars
+                    })
+                return
+            if not saved:
                 raise RuntimeError(f'Could not save revision for doc {self.doc_id}')
 
             for cl, sock in list(self.clients.items()):
