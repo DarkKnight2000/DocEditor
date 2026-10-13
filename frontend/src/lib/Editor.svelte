@@ -7,9 +7,10 @@
     import { page } from "$app/state";
     import { dev } from "$app/environment";
     import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit } from "$lib/sync_client.js";
+    import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
 
     // sync status to show in nav bar
-    let { sync_status = $bindable('Waiting...'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
+    let { sync_status = $bindable('Connecting…'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
 
     const MessageTypes = {
         CLIENT_ID: 0,
@@ -36,6 +37,43 @@
         limit_hit_timer = setTimeout(() => limit_hit = false, 2500);
     }
 
+    /** @type {Quill | null} */
+    let quill_instance = null;
+    // style of the line(s) at the cursor, shown in the style dropdown ('' when mixed)
+    let current_style = $state('text');
+    // The style dropdown is only rendered once Quill exists: Quill's theme replaces every <select>
+    // in the toolbar with its own picker when it starts, which would hide our option labels
+    let quill_ready = $state(false);
+
+    /**
+     * Applies a text style (Title, Subtitle, Text, Tiny) to every line touched by the selection
+     * @param {string} style
+     */
+    function apply_text_style(style)
+    {
+        const quill = quill_instance;
+        if(!quill) return;
+        const range = quill.getSelection(true);         // also puts focus back in the editor
+        const lines = (range.length ? quill.getLines(range.index, range.length) : [quill.getLine(range.index)[0]]).filter(Boolean);
+        const first = lines[0], last = lines[lines.length - 1];
+        if(!first || !last) return;
+        const start = quill.getIndex(first);
+        const end = quill.getIndex(last) + last.length() - 1;     // up to, not including, the last newline
+
+        const before = styleOfFormat(quill.getFormat(start, Math.max(end - start, 1)));
+        const { inline, align } = formatsForStyle(style, before);
+
+        if(end > start) quill.formatText(start, end - start, inline, 'user');
+        if(align !== undefined) quill.formatLine(start, Math.max(end - start, 1), 'align', align, 'user');
+        // an empty line has no text to format yet: set the formats for what gets typed next
+        if(range.length === 0)
+        {
+            for(const [name, value] of Object.entries(inline)) quill.format(name, value, 'user');
+        }
+        quill.setSelection(range.index, range.length, 'silent');
+        current_style = style;
+    }
+
 
     onMount(() => {
         // websocket
@@ -50,14 +88,14 @@
         socket.addEventListener("open", () => {
             // first message authenticates the socket; the server closes it if the token is invalid
             socket.send(JSON.stringify({ type: MessageTypes.CLIENT_ID, id: client_id, token: ws_token }));
-            sync_status = 'Syncing...';
+            sync_status = 'Connecting…';
         });
         socket.addEventListener("close", () => {
-            sync_status = 'Offline !';
+            sync_status = 'Offline';
         });
         socket.addEventListener("error", (err) => {
             console.log("Web socket error: ", err);
-            sync_status = 'Error connecting to server!';
+            sync_status = "Can't connect";
         });
 
         // editor
@@ -68,12 +106,45 @@
                 toolbar: {
                     container: "#editor-toolbar",
                 },
+                keyboard: {
+                    bindings: {
+                        // Enter at the end of a Title or Subtitle line starts a plain Text line instead of
+                        // carrying the heading on, like headings in other editors. (Enter in the middle of a
+                        // heading keeps both halves as heading.) Runs before Quill's own Enter handler.
+                        heading_enter: {
+                            key: "Enter",
+                            collapsed: true,
+                            suffix: /^$/,
+                            /** @this {any} */
+                            handler(/** @type {any} */ range, /** @type {any} */ context) {
+                                const style = styleOfFormat(context.format);
+                                if (style !== "title" && style !== "subtitle") return true;   // Quill's default
+                                const editor = this.quill;
+                                // the heading line keeps its line formats (e.g. Title's centring) ...
+                                const keep = context.format.align ? { align: context.format.align } : {};
+                                // ... and the new line gets none of the heading's formatting
+                                const clear = { align: null, size: null, bold: null, italic: null };
+                                editor.updateContents(new Delta().retain(range.index).insert("\n", keep).retain(1, clear), "user");
+                                editor.setSelection(range.index + 1, 0, "silent");
+                                return false;
+                            },
+                        },
+                    },
+                },
             },
             placeholder: "Start typing...",
         });
         // read-only until SERVER_INIT gives us the document and its revision
         let initialized = false;
         quill.disable();
+        quill_instance = quill;
+        quill_ready = true;
+
+        // keep the style dropdown in step with the line at the cursor
+        quill.on("editor-change", () => {
+            const range = quill.getSelection();
+            if(range) current_style = styleOfFormat(quill.getFormat(range));
+        });
 
         // characters typed, not counting the newline Quill always keeps at the end
         const text_length = () => quill.getLength() - 1;
@@ -105,7 +176,7 @@
             const outgoing = takeOutgoing(ClientState);
             if (outgoing) {
                 socket.send(JSON.stringify({ type: MessageTypes.CLIENT_REV, ...outgoing }));
-                sync_status = 'Syncing...'
+                sync_status = 'Saving…'
             }
         }, 500);
 
@@ -116,7 +187,7 @@
                 if (recv_data.type == MessageTypes.SERVER_ACK) {
                     // accepted my changes
                     applyAck(ClientState, recv_data.rev);
-                    sync_status = 'Saved !';
+                    sync_status = 'Saved';
                 } else if (recv_data.type == MessageTypes.SERVER_REV) {
                     // other client changes
                     const B = new Delta(JSON.parse(recv_data.content));
@@ -130,7 +201,7 @@
                     initialized = true;
                     quill.enable();
                     quill.focus();
-                    sync_status = 'Saved !';
+                    sync_status = 'Saved';
                 } else if (recv_data.type == MessageTypes.SERVER_DOC_RENAME) {
                     // rename state variable in parent
                     doc_name = recv_data.name;
@@ -141,7 +212,7 @@
                     // Edits from several people together went over the limit and the server refused
                     // this one. Reload to get back in sync with the saved document.
                     flash_limit();
-                    sync_status = 'Document is full, reloading...';
+                    sync_status = 'Document is full, reloading…';
                     quill.disable();
                     setTimeout(() => location.reload(), 2000);
                 } else {
@@ -149,7 +220,7 @@
                 }
             } catch (error) {
                 console.error("Error handling message from server:", error, event.data);
-                sync_status = 'Error saving!';
+                sync_status = 'Error saving';
             }
         });
 
@@ -165,26 +236,26 @@
     // });
 </script>
 
-<div class="h-screen flex flex-col justify-stretch">
+<div class="flex-1 min-h-0 flex flex-col">
+    <!-- full-width bar under the header; the toolbar's own light top line is only as wide as the toolbar -->
+    <div class="flex justify-center bg-white border-b border-gray-200 px-2">
     <div
         id="editor-toolbar"
-        class="text-sm text-black focus:outline-none text-left self-center"
+        class="flex flex-wrap items-center justify-center gap-y-1 px-4 py-1.5 max-w-full text-sm text-black"
     >
-        <!-- Add font size dropdown -->
+        <!-- Text style: presets of size, bold, italic and alignment (see text_styles.js) -->
         <span class="ql-formats">
-            <!-- Note a missing, thus falsy value, is used to reset to default -->
-            <select class="ql-size">
-                <option value="huge"></option>
-                <option value="large"></option>
-                <option selected></option>
-                <option value="small"></option>
-            </select>
-            <!-- <select class="ql-header">
-                <option value="1">Heading 1</option>
-                <option value="2">Heading 2</option>
-                <option value="3">Heading 3</option>
-                <option value="">Normal</option>
-            </select> -->
+            {#if quill_ready}
+                <select class="text-style-picker" aria-label="Text style" title="Text style"
+                    value={current_style} onchange={(e) => apply_text_style(e.currentTarget.value)}>
+                    {#if current_style === ''}
+                        <option value="" disabled>Custom</option>
+                    {/if}
+                    {#each TEXT_STYLES as style}
+                        <option value={style.id}>{style.label}</option>
+                    {/each}
+                </select>
+            {/if}
         </span>
         <!-- Add a bold button -->
         <span class="ql-formats">
@@ -217,16 +288,17 @@
             <button class="ql-clean" title="Clean button" value="super"></button>
         </span>
         {#if max_chars !== Infinity}
-            <span class="ql-formats text-xs {limit_hit ? 'text-red-600 font-bold' : 'text-gray-400'}"
+            <span class="ql-formats text-xs whitespace-nowrap {limit_hit ? 'text-red-600 font-bold' : 'text-gray-400'}"
                 title="Documents can have up to {max_chars} characters">
                 {char_count} / {max_chars}{limit_hit ? ' (limit reached)' : ''}
             </span>
         {/if}
     </div>
-    <div class="bg-gray-100 px-20 xl:px-40 2xl:px-80 py-10 flex-1 border-t-gray-800">
-        <div
-            id="editor"
-            class="bg-white text-sm text-black focus:outline-none text-left px-10 py-15"
-        ></div>
+    </div>
+    <!-- grey desk with a white page on it -->
+    <div class="flex-1 overflow-y-auto bg-gray-50 px-3 sm:px-6 py-6 sm:py-10">
+        <div class="max-w-3xl mx-auto bg-white rounded-sm border border-gray-200 shadow-sm min-h-full">
+            <div id="editor" class="text-black text-left"></div>
+        </div>
     </div>
 </div>

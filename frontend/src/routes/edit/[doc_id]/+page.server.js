@@ -23,15 +23,17 @@ export async function load({ params, cookies, locals })
                 'doc_id': params.doc_id,
                 'doc_name': doc_info.doc_name,
                 'user_pic': cookies.get('user_pic'),
+                'user_name': cookies.get('user_name'),
                 'ws_token': await GetSocketToken(locals.user_id, params.doc_id)
             }
         }
         else
         {
             return {
-                'doc_name': '--:--',
+                'doc_name': '',
                 'doc_id': params.doc_id,
                 'user_pic': cookies.get('user_pic'),
+                'user_name': cookies.get('user_name'),
                 'hidden': true
             };
         };

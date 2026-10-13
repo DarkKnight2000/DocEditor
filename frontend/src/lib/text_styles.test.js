@@ -1,0 +1,47 @@
+// Run with: npm test
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { styleOfFormat, formatsForStyle } from './text_styles.js';
+
+test('styleOfFormat reads the style from the size', () => {
+    assert.equal(styleOfFormat({ size: 'huge', bold: true, align: 'center' }), 'title');
+    assert.equal(styleOfFormat({ size: 'large' }), 'subtitle');
+    assert.equal(styleOfFormat({ size: 'small' }), 'tiny');
+    assert.equal(styleOfFormat({ bold: true }), 'text');
+    assert.equal(styleOfFormat({}), 'text');
+    assert.equal(styleOfFormat({ size: ['huge', 'small'] }), '', 'mixed sizes have no single style');
+    assert.equal(styleOfFormat({ align: 'center' }), '', 'centred normal text is not the Text style');
+    assert.equal(styleOfFormat({ align: 'right', bold: true }), '');
+});
+
+test('Title is big, bold and centred', () => {
+    assert.deepEqual(formatsForStyle('title', 'text'),
+        { inline: { size: 'huge', bold: true, italic: false }, align: 'center' });
+});
+
+test('Subtitle is bold and italic, and not centred when coming from Title', () => {
+    assert.deepEqual(formatsForStyle('subtitle', 'text'),
+        { inline: { size: 'large', bold: true, italic: true }, align: undefined });
+    assert.equal(formatsForStyle('subtitle', 'title').align, false);
+});
+
+test('back to Text from a heading removes the emphasis the heading added', () => {
+    assert.deepEqual(formatsForStyle('text', 'title'),
+        { inline: { size: false, bold: false, italic: false }, align: false });
+    assert.deepEqual(formatsForStyle('text', 'subtitle'),
+        { inline: { size: false, bold: false, italic: false }, align: false });
+});
+
+test('Text always left-aligns, even text the user centred', () => {
+    assert.deepEqual(formatsForStyle('text', 'text'), { inline: { size: false }, align: false });
+    assert.equal(formatsForStyle('text', 'tiny').align, false);
+});
+
+test('Text to Tiny keeps the bold and alignment the user set themselves', () => {
+    assert.deepEqual(formatsForStyle('tiny', 'text'), { inline: { size: 'small' }, align: undefined });
+});
+
+test('a mixed selection is normalised', () => {
+    assert.deepEqual(formatsForStyle('text', ''),
+        { inline: { size: false, bold: false, italic: false }, align: false });
+});

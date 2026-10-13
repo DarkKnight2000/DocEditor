@@ -1,44 +1,144 @@
 @reference 'tailwindcss';
 @import './layout.css';
 
-.ql-editor {
-    @apply text-lg font-nunito;
-}
-
-.ql-toolbar
-{
-    @apply font-nunito select-none;
-}
+/* --- the page --------------------------------------------------------------- */
 
 .ql-container.ql-snow, .ql-toolbar.ql-snow {
     border: none;
 }
 
+/* light line above the toolbar, only as wide as the toolbar itself */
+.ql-toolbar.ql-snow {
+    @apply border-t border-gray-100;
+}
+
+.ql-container {
+    @apply font-nunito;
+}
+
+.ql-editor {
+    @apply text-lg font-nunito leading-relaxed;
+    /* page margins, smaller on phones */
+    padding: 2rem 1.5rem;
+    min-height: calc(100vh - 12rem);
+}
+
+@media (min-width: 640px) {
+    .ql-editor {
+        padding: 4rem 4.5rem;
+    }
+}
+
+/* the "Start typing..." placeholder lines up with the page margins */
 .ql-editor.ql-blank::before {
-    @apply pl-10
+    @apply text-gray-400 not-italic;
+    left: 1.5rem;
+    right: 1.5rem;
+}
+
+@media (min-width: 640px) {
+    .ql-editor.ql-blank::before {
+        left: 4.5rem;
+        right: 4.5rem;
+    }
+}
+
+/* text styles (text_styles.js): Title uses 'huge', Subtitle 'large', Tiny 'small' */
+.ql-editor .ql-size-huge {
+    font-size: 2em;
+    line-height: 1.25;
+}
+
+.ql-editor .ql-size-large {
+    font-size: 1.35em;
+    line-height: 1.4;
+}
+
+.ql-editor .ql-size-small {
+    font-size: 0.85em;
+}
+
+/* --- the toolbar ------------------------------------------------------------ */
+
+.text-style-picker {
+    @apply font-nunito text-sm rounded-md pl-2 pr-1 py-1 w-28 cursor-pointer outline-none bg-white border border-transparent hover:border-gray-200 focus:border-yellow-400;
+}
+
+.text-style-picker option {
+    @apply bg-white text-gray-900;
+}
+
+.ql-toolbar {
+    @apply font-nunito select-none;
+}
+
+/* each group is a row with a little space between its buttons (Quill floats them flush) */
+.ql-toolbar.ql-snow .ql-formats {
+    @apply inline-flex items-center gap-1 mx-1 sm:mx-2.5;
+}
+
+/* thin divider between groups of buttons */
+.ql-toolbar.ql-snow .ql-formats + .ql-formats {
+    @apply border-l border-gray-200 pl-2 sm:pl-3.5;
+}
+
+.ql-toolbar.ql-snow button {
+    @apply rounded-md;
+}
+
+.ql-toolbar.ql-snow button:hover {
+    @apply bg-gray-100;
+}
+
+/* active formatting uses the brand yellow instead of Quill's blue */
+.ql-toolbar.ql-snow button.ql-active {
+    @apply bg-yellow-100;
+}
+
+.ql-snow.ql-toolbar button:hover .ql-stroke,
+.ql-snow.ql-toolbar button.ql-active .ql-stroke,
+.ql-snow.ql-toolbar .ql-picker-label:hover .ql-stroke,
+.ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-stroke,
+.ql-snow.ql-toolbar .ql-picker-item:hover .ql-stroke,
+.ql-snow.ql-toolbar .ql-picker-item.ql-selected .ql-stroke {
+    stroke: #111827;
+}
+
+.ql-snow.ql-toolbar button:hover .ql-fill,
+.ql-snow.ql-toolbar button.ql-active .ql-fill,
+.ql-snow.ql-toolbar .ql-picker-label:hover .ql-fill,
+.ql-snow.ql-toolbar .ql-picker-label.ql-active .ql-fill,
+.ql-snow.ql-toolbar .ql-picker-item:hover .ql-fill,
+.ql-snow.ql-toolbar .ql-picker-item.ql-selected .ql-fill {
+    fill: #111827;
+}
+
+.ql-snow.ql-toolbar .ql-picker-label:hover,
+.ql-snow.ql-toolbar .ql-picker-label.ql-active,
+.ql-snow.ql-toolbar .ql-picker-item:hover,
+.ql-snow.ql-toolbar .ql-picker-item.ql-selected {
+    color: #111827;
 }
 
 .ql-toolbar.ql-snow .ql-picker-label {
-    @apply border-none text-center h-auto font-nunito;
+    @apply border-none rounded-md h-auto font-nunito;
 }
 
-.ql-snow .ql-size.ql-picker
-{
-    @apply w-30 text-center;
+.ql-toolbar.ql-snow .ql-picker-label:hover {
+    @apply bg-gray-100;
 }
 
-.ql-toolbar.ql-snow > * {
-    @apply mx-1
+
+.ql-toolbar.ql-snow .ql-picker.ql-expanded .ql-picker-options {
+    @apply rounded-lg border-gray-200 shadow-lg;
 }
 
-/* .ql-toolbar.ql-snow .ql-formats {
-    @apply border-gray-500 border-l px-5
-} */
+/* --- links and the link tooltip --------------------------------------------- */
 
-.ql-toolbar.ql-snow .ql-formats > * {
-    @apply mx-1
+.ql-snow .ql-editor a {
+    @apply text-blue-700;
 }
 
 .ql-snow .ql-tooltip {
-    @apply font-nunito
+    @apply font-nunito rounded-lg border-gray-200 shadow-lg;
 }
