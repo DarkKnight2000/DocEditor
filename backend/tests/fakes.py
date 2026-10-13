@@ -18,7 +18,9 @@ class FakeDB:
         monkeypatch.setattr(db_utils, 'get_doc_info', self.get_doc_info)
         monkeypatch.setattr(db_utils, 'try_update_doc', self.try_update_doc)
         monkeypatch.setattr(db_utils, 'get_doc_owner_type', self.get_doc_owner_type)
+        monkeypatch.setattr(db_utils, 'get_user_card', self.get_user_card)
         self.owner_types = {}     # doc_id -> 'guest' | 'known'; guest when not set
+        self.user_cards = {}      # user_id -> {'name', 'picture'}; a name made from the id when not set
 
     def add_doc(self, doc_id='doc', text='', rev=0):
         head = {'rev_id': rev, 'delta': [{'insert': text}] if text else []}
@@ -29,6 +31,9 @@ class FakeDB:
 
     async def get_doc_owner_type(self, db_handle, doc_id):
         return self.owner_types.get(doc_id, 'guest')
+
+    async def get_user_card(self, db_handle, user_id):
+        return copy.deepcopy(self.user_cards.get(user_id, {'name': user_id.title(), 'picture': None}))
 
     async def get_doc_info(self, db_handle, doc_id):
         if doc_id not in self.docs:

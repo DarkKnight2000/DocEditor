@@ -141,6 +141,18 @@ def test_unverified_email_is_not_stored(with_pool):
     with_pool(body)
 
 
+@needs_db
+def test_login_stores_only_https_picture_links(with_pool):
+    async def body(pool):
+        user = uid()
+        await db_utils.upsert_user_info(pool, user, 'Pic', None, 'https://example.test/pic.png')
+        assert await db_utils.get_user_card(pool, user) == {'name': 'Pic', 'picture': 'https://example.test/pic.png'}
+        await db_utils.upsert_user_info(pool, user, 'Pic', None, 'javascript:alert(1)')
+        assert (await db_utils.get_user_card(pool, user))['picture'] is None
+        assert await db_utils.get_user_card(pool, uid()) == {'name': '', 'picture': None}
+    with_pool(body)
+
+
 async def make_doc(pool):
     owner, collab = uid(), uid()
     await db_utils.upsert_user_info(pool, owner, 'Owner', f'{owner}@test')
@@ -182,6 +194,9 @@ def test_add_and_remove_collaborator(with_pool):
         assert await db_utils.edit_collab(pool, doc, owner, f'{collab}@test') == collab
         assert await db_utils.edit_collab(pool, doc, owner, f'{collab}@test') == collab   # adding twice is fine
         assert (await db_utils.get_doc_info_masked(pool, doc, collab))['edit_collab'] == [collab]
+        # the share dialog lists them with their picture link (None until they sign in with one)
+        assert await db_utils.get_collab_info(pool, doc, owner) == [
+            {'id': collab, 'name': 'Collab', 'email': f'{collab}@test', 'picture': None}]
         await db_utils.edit_collab(pool, doc, owner, f'{collab}@test', remove=True)
         assert await db_utils.get_doc_info_masked(pool, doc, collab) == {}
     with_pool(body)

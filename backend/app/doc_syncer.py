@@ -18,6 +18,7 @@ class MessageType(Enum):
     SERVER_DOC_RENAME = 5
     SERVER_DROP_ACCESS = 6 # Client removed as a collaborator
     SERVER_DOC_LIMIT = 7   # Client's change was rejected: document would exceed its size limit
+    SERVER_PRESENCE = 8    # The other people who have the document open
 
 # Maximum length in characters of documents owned by guest users ('known' owners have no limit);
 # self-hosted copies can raise it through the environment
@@ -51,6 +52,7 @@ class DocSyncer:
     def __init__(self, doc_id: str):
         self.clients:dict[str, WebSocket] = {}
         self.client_users:dict[str, str] = {}   # client id -> user id that opened it
+        self.user_cards:dict[str, dict] = {}    # user id -> name and picture, for users connected now
         self.doc_id = doc_id
         # Serializes connect/disconnect/add_revision for this doc, so every client gets
         # SERVER_INIT and then every later revision exactly once and in order.
@@ -88,6 +90,9 @@ class DocSyncer:
             owner_type = await db_utils.get_doc_owner_type(db_handle, self.doc_id)
             self.max_chars = None if owner_type == 'known' else MAX_DOC_CHARS
 
+            if user_id not in self.user_cards:
+                self.user_cards[user_id] = await db_utils.get_user_card(db_handle, user_id)
+
             self.clients[client_id] = websocket
             self.client_users[client_id] = user_id
             await websocket.send_json({
@@ -96,6 +101,7 @@ class DocSyncer:
                 "content": head['delta'],
                 "max_chars": self.max_chars
             })
+            await self._send_presence()
             return True
 
     async def disconnect(self, client_id, db_handle: db_utils.DB_Handle):
@@ -103,8 +109,23 @@ class DocSyncer:
         async with self.lock:
             if self.clients.pop(client_id, None) is None:
                 return
-            self.client_users.pop(client_id, None)
+            user_id = self.client_users.pop(client_id, None)
+            # forget the card when their last tab closes, so a new name or picture shows next time
+            if user_id not in self.client_users.values():
+                self.user_cards.pop(user_id, None)
             await db_utils.delete_client_rev(db_handle, self.doc_id, client_id)
+            await self._send_presence()
+
+    async def _send_presence(self):
+        """Tells every client who else has the document open: each person once, however many
+        tabs they use, in the order they joined, and never the client's own user."""
+        users = list(dict.fromkeys(self.client_users.values()))
+        for client_id, sock in list(self.clients.items()):
+            me = self.client_users.get(client_id)
+            await self._send(sock, {
+                "type": MessageType.SERVER_PRESENCE.value,
+                "users": [{"id": u, **self.user_cards.get(u, {'name': '', 'picture': None})} for u in users if u != me]
+            })
 
     async def disconnect_user(self, user_id: str, db_handle: db_utils.DB_Handle):
         """Drops every connection opened by user_id, e.g. after they're removed as a collaborator."""

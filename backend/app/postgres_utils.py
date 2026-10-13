@@ -49,6 +49,8 @@ async def migrate(db_handle: DB_Handle):
             "ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'guest' "
             "CHECK (user_type IN ('guest', 'known'))"
         )
+        # profile picture link, shown to the others editing the same document
+        await conn.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS picture TEXT')
 
 
 def get_current_timestamp():
@@ -117,9 +119,13 @@ async def db_disconnect(db_handle: DB_Handle):
 # ---------------------------------------------------------------------------
 
 
-async def upsert_user_info(db_handle: DB_Handle, user_id: str, user_name: str, user_email: str | None):
+async def upsert_user_info(db_handle: DB_Handle, user_id: str, user_name: str, user_email: str | None,
+                           picture: str | None = None):
     """Creates or updates the user. user_id (Google's sub) is the identity; user_email is only
-    stored when Google has verified it (None otherwise), and is used to find collaborators."""
+    stored when Google has verified it (None otherwise), and is used to find collaborators.
+    picture is the Google profile picture link; anything but an https link is dropped."""
+    if not (isinstance(picture, str) and picture.startswith('https://') and len(picture) <= 2048):
+        picture = None
     async with db_handle.acquire() as conn:
         async with conn.transaction():
             if user_email:
@@ -131,12 +137,19 @@ async def upsert_user_info(db_handle: DB_Handle, user_id: str, user_name: str, u
                 )
             await conn.execute(
                 '''
-                INSERT INTO users (user_id, name, email)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email
+                INSERT INTO users (user_id, name, email, picture)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT (user_id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email, picture = EXCLUDED.picture
                 ''',
-                user_id, user_name, user_email
+                user_id, user_name, user_email, picture
             )
+
+
+async def get_user_card(db_handle: DB_Handle, user_id: str) -> dict:
+    """Name and picture link shown to the others editing a document with this user"""
+    async with db_handle.acquire() as conn:
+        row = await conn.fetchrow('SELECT name, picture FROM users WHERE user_id = $1', user_id)
+    return {'name': row['name'], 'picture': row['picture']} if row else {'name': '', 'picture': None}
 
 
 async def get_user_docs(db_handle: DB_Handle, user_id: str):
@@ -364,7 +377,7 @@ async def get_collab_info(db_handle: DB_Handle, doc_id: str, user_id: str):
     collab_info = []
     async with db_handle.acquire() as conn:
         for cid in collabs_ids:
-            row = await conn.fetchrow('SELECT name, email FROM users WHERE user_id = $1', cid)
+            row = await conn.fetchrow('SELECT name, email, picture FROM users WHERE user_id = $1', cid)
             if row is not None:
                 collab_info.append({'id': cid, **_row_to_dict(row)})
             else:

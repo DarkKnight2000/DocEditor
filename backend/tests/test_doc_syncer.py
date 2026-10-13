@@ -10,9 +10,9 @@ import app.doc_syncer as doc_syncer
 from app.doc_syncer import DocSyncer, MessageType, text_length
 from tests.fakes import FakeDB, FakeSocket, SimClient, normalize, random_edit, text_of
 
-INIT, ACK, REV, DROP, LIMIT = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
-                               MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value,
-                               MessageType.SERVER_DOC_LIMIT.value)
+INIT, ACK, REV, DROP, LIMIT, PRESENCE = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
+                                         MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value,
+                                         MessageType.SERVER_DOC_LIMIT.value, MessageType.SERVER_PRESENCE.value)
 
 
 def run(coro):
@@ -37,7 +37,8 @@ def test_connect_sends_document_and_registers_client(db):
         syncer = DocSyncer('doc')
         sock = await join(syncer, 'c1')
         assert sock.sent == [{'type': INIT, 'rev': 4, 'content': [{'insert': 'hello'}],
-                              'max_chars': doc_syncer.MAX_DOC_CHARS}]
+                              'max_chars': doc_syncer.MAX_DOC_CHARS},
+                             {'type': PRESENCE, 'users': []}]
         assert db.docs['doc']['clients'] == {'c1': 4}
     run(scenario())
 
@@ -162,6 +163,57 @@ def test_disconnect_user_drops_only_that_users_connections(db):
             assert sock.of_type(DROP) and sock.closed_with == 1008
         assert owner_sock.closed_with is None and not owner_sock.of_type(DROP)
         assert set(syncer.clients) == {'tab1'}
+    run(scenario())
+
+
+def others(sock):
+    """Names in the latest presence message a client received"""
+    return [u['name'] for u in sock.of_type(PRESENCE)[-1]['users']]
+
+
+def test_presence_lists_everyone_else_once_in_join_order(db):
+    db.add_doc()
+    db.user_cards['ann'] = {'name': 'Ann', 'picture': 'https://example.test/ann.png'}
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        ann = await join(syncer, 'a1', 'ann')
+        bob = await join(syncer, 'b1', 'bob')
+        bob_phone = await join(syncer, 'b2', 'bob')     # a second tab doesn't add Bob twice
+        cat = await join(syncer, 'c1', 'cat')
+        assert others(ann) == ['Bob', 'Cat']
+        assert others(bob) == others(bob_phone) == ['Ann', 'Cat']
+        assert others(cat) == ['Ann', 'Bob']
+        assert cat.of_type(PRESENCE)[-1]['users'][0] == {'id': 'ann', 'name': 'Ann', 'picture': 'https://example.test/ann.png'}
+    run(scenario())
+
+
+def test_presence_updates_when_people_leave(db):
+    db.add_doc()
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        ann = await join(syncer, 'a1', 'ann')
+        await join(syncer, 'b1', 'bob')
+        await join(syncer, 'b2', 'bob')
+        await syncer.disconnect('b1', None)
+        assert others(ann) == ['Bob'], 'Bob still has a tab open'
+        await syncer.disconnect('b2', None)
+        assert others(ann) == []
+        assert 'bob' not in syncer.user_cards
+    run(scenario())
+
+
+def test_removed_collaborator_disappears_from_presence(db):
+    db.add_doc()
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        owner = await join(syncer, 'tab1', 'owner')
+        await join(syncer, 'tab2', 'collab')
+        assert others(owner) == ['Collab']
+        await syncer.disconnect_user('collab', None)
+        assert others(owner) == []
     run(scenario())
 
 

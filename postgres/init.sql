@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS users (
     name        TEXT NOT NULL,
     email       TEXT UNIQUE,        -- NULL if unverified or now owned by another account
     -- 'guest' accounts have document and size limits, 'known' accounts don't
-    user_type   TEXT NOT NULL DEFAULT 'guest' CHECK (user_type IN ('guest', 'known'))
+    user_type   TEXT NOT NULL DEFAULT 'guest' CHECK (user_type IN ('guest', 'known')),
+    picture     TEXT                -- Google profile picture link, shown to people editing the same document
 );
 
 CREATE TABLE IF NOT EXISTS documents (

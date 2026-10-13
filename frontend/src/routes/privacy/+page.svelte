@@ -50,7 +50,9 @@
     <h2>Who can see your information</h2>
     <ul>
         <li><strong>People you share documents with.</strong> Anyone added to a document can read and edit it.
-            They see the owner's name, and the names and email addresses of everyone the document is shared with.</li>
+            They see the owner's name, and the names and email addresses of everyone the document is shared with.
+            While you have a document open, the others who have it open at the same time see your name and
+            profile picture.</li>
         <li><strong>Google.</strong> The sign-in button and the site's font are loaded from Google, so Google receives
             your IP address and basic browser information when you visit. Google's handling of that is covered by
             <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer">Google's Privacy Policy</a>.</li>

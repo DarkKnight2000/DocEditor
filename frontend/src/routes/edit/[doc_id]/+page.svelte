@@ -1,6 +1,8 @@
 <script>
     import Editor from '$lib/Editor.svelte';
     import AppLogo from '$lib/AppLogo.svelte';
+    import PresenceAvatars from '$lib/PresenceAvatars.svelte';
+    import Avatar from '$lib/Avatar.svelte';
     
     import ShareIcon from '@iconify-svelte/material-symbols/group-add-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
@@ -12,6 +14,9 @@
     
     // sync status with server, set by the editor
     let sync_status = $state('');
+    // the other people who have the document open, set by the editor
+    /** @type {{id: string, name: string, picture: string | null}[]} */
+    let others = $state([]);
     // how the status is shown: problems in red, saved with a cloud tick, everything else in progress
     let status_kind = $derived(
         ['Offline', "Can't connect", 'Error saving', 'Document is full, reloading…'].includes(sync_status) ? 'problem'
@@ -198,6 +203,8 @@
             {/if}
         </div>
 
+        <PresenceAvatars users={others} />
+
         <button onclick={display_collabs} aria-label="Share" title="Share"
             class="flex items-center gap-1.5 font-bold py-2 px-3 sm:pl-3 sm:pr-4 bg-yellow-300 hover:bg-yellow-400 text-gray-900 rounded-xl cursor-pointer shrink-0">
             <ShareIcon class="w-5 h-5" aria-hidden="true" />
@@ -213,7 +220,7 @@
         {/if}
     </header>
 
-    <Editor bind:sync_status={sync_status} doc_id={data.doc_id} ws_token={data.ws_token} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
+    <Editor bind:sync_status={sync_status} bind:others={others} doc_id={data.doc_id} ws_token={data.ws_token} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
 </div>
 
 <!-- Share dialog -->
@@ -248,9 +255,7 @@
             <p class="text-sm font-semibold">People with access</p>
             {#each collabs_info as cuser_info (cuser_info.id)}
                 <div class="flex items-center gap-3 py-2">
-                    <div class="w-8 h-8 rounded-full shrink-0 bg-gray-100 text-gray-600 text-sm font-bold flex items-center justify-center" aria-hidden="true">
-                        {(cuser_info.name ?? '?').trim().charAt(0).toUpperCase()}
-                    </div>
+                    <Avatar id={cuser_info.id} name={cuser_info.name ?? ''} picture={cuser_info.picture} />
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold truncate">{cuser_info.name}</p>
                         <p class="text-xs text-gray-500 truncate">{cuser_info.email ?? 'no email on file'}</p>

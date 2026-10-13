@@ -73,7 +73,9 @@ export async function POST({ request, cookies, url, fetch })
             body: JSON.stringify({
                 name: payload.name ?? "",
                 // collaborators are found by email, so only store it once Google has verified it
-                email: payload.email_verified ? payload.email : null
+                email: payload.email_verified ? payload.email : null,
+                // shown to the others editing the same document
+                picture: payload.picture ?? null
             })
         });
     }

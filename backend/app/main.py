@@ -57,10 +57,11 @@ def get_socket_user(token: str | None, doc_id: str) -> str | None:
 class UserInfo(BaseModel):
     name: str
     email: str | None = None    # only sent when Google has verified it
+    picture: str | None = None  # Google profile picture link
 
 @router.post("/user-login")
 async def user_login(user_info: UserInfo, user_id: str = Depends(get_internal_user)):
-    await db_utils.upsert_user_info(db_handle, user_id, user_info.name, user_info.email)
+    await db_utils.upsert_user_info(db_handle, user_id, user_info.name, user_info.email, user_info.picture)
     return Response("Ok")
 
 @router.get("/get-user-docs")

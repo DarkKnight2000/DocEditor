@@ -39,6 +39,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - Edits from everyone with the document open are merged live, and nothing is lost when people type in the same place at the same time.
 - The editor shows the sync state: *Connecting*, *Saving*, *Saved*, *Offline*, or an error.
 - A renamed document updates for everyone who has it open.
+- Avatars in the header show who else has the document open right now, with their Google profile pictures.
 
 **Editing**
 - Rich text: bold, italic, underline, strikethrough, superscript and subscript, alignment, lists, links.
@@ -139,7 +140,7 @@ backend and frontend. They run with `make test`.
 |---|---|
 | `backend/tests/test_delta.py` | `compose` and `transform` cases, plus a randomized check that concurrent edits converge |
 | `backend/tests/test_delta_vs_quill.py` | **Differential test:** 6,000 random operations run through the Python port and the real `quill-delta` (in Node), with identical results required |
-| `backend/tests/test_doc_syncer.py` | The sync server against an in-memory fake database: revision numbering, rebasing concurrent edits, retries, history pruning, disconnecting removed collaborators, size limits, and randomized multi-client sessions that must converge |
+| `backend/tests/test_doc_syncer.py` | The sync server against an in-memory fake database: revision numbering, rebasing concurrent edits, retries, history pruning, disconnecting removed collaborators, size limits, who has the document open, and randomized multi-client sessions that must converge |
 | `backend/tests/test_postgres_utils.py` | Database operations against real Postgres in a throwaway schema: sign-in and email edge cases, renames, sharing, compare-and-swap writes, limits, deletes |
 | `backend/tests/test_auth.py` | API and WebSocket tokens: expiry, wrong audience, wrong document |
 | `frontend/src/lib/sync_client.test.js` | The browser's sync state machine, including randomized sessions where every client's screen must match the server |

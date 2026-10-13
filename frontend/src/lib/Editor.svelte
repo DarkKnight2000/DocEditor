@@ -13,7 +13,8 @@
     import ClosePaneIcon from "@iconify-svelte/material-symbols/left-panel-close-outline-rounded";
 
     // sync status to show in nav bar
-    let { sync_status = $bindable('Connecting…'), doc_id, ws_token, doc_name = $bindable(), noperm_dialog } = $props();
+    // others: the other people who have the document open, sent by the server
+    let { sync_status = $bindable('Connecting…'), doc_id, ws_token, doc_name = $bindable(), others = $bindable([]), noperm_dialog } = $props();
 
     const MessageTypes = {
         CLIENT_ID: 0,
@@ -23,7 +24,8 @@
         SERVER_INIT: 4,
         SERVER_DOC_RENAME: 5,
         SERVER_DROP_ACCESS: 6,
-        SERVER_DOC_LIMIT: 7
+        SERVER_DOC_LIMIT: 7,
+        SERVER_PRESENCE: 8
     };
 
     const ClientState = createClientState();
@@ -146,6 +148,7 @@
         });
         socket.addEventListener("close", () => {
             sync_status = 'Offline';
+            others = [];      // no longer know who's here
         });
         socket.addEventListener("error", (err) => {
             console.log("Web socket error: ", err);
@@ -276,6 +279,8 @@
                     sync_status = 'Document is full, reloading…';
                     quill.disable();
                     setTimeout(() => location.reload(), 2000);
+                } else if (recv_data.type == MessageTypes.SERVER_PRESENCE) {
+                    others = recv_data.users;
                 } else {
                     console.warn("Unknown message from server: ", recv_data);
                 }
