@@ -4,7 +4,19 @@
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="text-scale" content="scale" />
-		<title>Raya</title>
+		<!-- Each page sets its own <title> (svelte:head); a second one here would make two, which breaks
+		     link previews. Previews read these tags first, including for pages rendered only in the browser. -->
+		<meta name="description" content="A minimal, open-source collaborative document editor. Write together in real time." />
+		<meta property="og:site_name" content="Raya" />
+		<meta property="og:title" content="Raya" />
+		<meta property="og:description" content="A minimal, open-source collaborative document editor. Write together in real time." />
+		<meta property="og:type" content="website" />
+		<!-- previews need the image's full address; hooks.server.js fills in %raya.origin% (e.g. https://your.domain) -->
+		<meta property="og:image" content="%raya.origin%/og-image.png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="Raya: write together, in real time." />
+		<meta name="twitter:card" content="summary_large_image" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.ico" sizes="48x48" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<link rel="apple-touch-icon" href="%sveltekit.assets%/apple-touch-icon.png" />

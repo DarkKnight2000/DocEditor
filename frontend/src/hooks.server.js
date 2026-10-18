@@ -13,5 +13,9 @@ export async function handle({ event, resolve })
         event.cookies.delete('user_id', { path: '/' });
     }
 
-    return resolve(event);
+    // app.html's preview tags need absolute URLs. url.origin is the address the visitor used
+    // (behind Caddy it comes from the X-Forwarded-Proto/Host headers), so this works on any domain.
+    return resolve(event, {
+        transformPageChunk: ({ html }) => html.replaceAll('%raya.origin%', event.url.origin)
+    });
 }
