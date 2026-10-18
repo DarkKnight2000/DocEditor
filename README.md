@@ -45,6 +45,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - Rich text: bold, italic, underline, strikethrough, superscript and subscript, alignment, lists, links.
 - One-click text styles: *Title* (large, bold, centred), *Subtitle* (bold italic), *Text* and *Tiny*. Pressing Enter after a heading switches back to Text.
 - An **outline pane** lists every Title and Subtitle, jumps to a section on click and highlights the section the cursor is in.
+- **Download as Word (.docx)**, built in the browser. Titles and Subtitles become Word headings, so Word's navigation pane shows the same outline, and lists, links and formatting carry over. The converter only loads when it's first used.
 
 **Sharing and accounts**
 - Google Sign-In; Raya never sees a password.
@@ -156,6 +157,7 @@ backend and frontend. They run with `make test`.
 | `backend/tests/test_auth.py` | API and WebSocket tokens: expiry, wrong audience, wrong document |
 | `frontend/src/lib/sync_client.test.js` | The browser's sync state machine, including randomized sessions where every client's screen must match the server |
 | `frontend/src/lib/text_styles.test.js`, `outline.test.js` | Text-style detection and the outline/section tracking |
+| `frontend/src/lib/export_docx.test.js` | Word export: generates real `.docx` files and checks the Word XML for headings, formats, links (only web links kept) and list numbering |
 
 The sync logic in the browser has no Quill or DOM code, so Node can test it directly.
 

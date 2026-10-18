@@ -7,6 +7,7 @@
     import ShareIcon from '@iconify-svelte/material-symbols/group-add-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
     import SavedIcon from '@iconify-svelte/material-symbols/cloud-done-outline-rounded';
+    import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
     import SavingIcon from '@iconify-svelte/material-symbols/sync-rounded';
     import OfflineIcon from '@iconify-svelte/material-symbols/cloud-off-outline-rounded';
 
@@ -17,6 +18,38 @@
     // the other people who have the document open, set by the editor
     /** @type {{id: string, name: string, picture: string | null}[]} */
     let others = $state([]);
+
+    /** @type {any} the editor component, for its contents */
+    let editor;
+    let downloading = $state(false);
+
+    // Word file of the document as it is on screen; the converter loads only when first used
+    async function download_docx()
+    {
+        if(downloading || !editor) return;
+        downloading = true;
+        try
+        {
+            const { docxBlob, docxFileName } = await import('$lib/export_docx.js');
+            const name = (shown_doc_name ?? '').replace(/\s+/g, ' ').trim();
+            const blob = await docxBlob(editor.get_contents(), name);
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = docxFileName(name);
+            link.click();
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+        catch(ex)
+        {
+            console.error('Download failed:', ex);
+            alert('Could not create the Word file. Please try again.');
+        }
+        finally
+        {
+            downloading = false;
+        }
+    }
     // how the status is shown: problems in red, saved with a cloud tick, everything else in progress
     let status_kind = $derived(
         ['Offline', "Can't connect", 'Error saving', 'Document is full, reloading…'].includes(sync_status) ? 'problem'
@@ -205,6 +238,13 @@
 
         <PresenceAvatars users={others} />
 
+        {#if !data.hidden}
+            <button onclick={download_docx} disabled={downloading} aria-label="Download as Word document" title="Download as Word (.docx)"
+                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-wait">
+                <DownloadIcon class="w-5 h-5" aria-hidden="true" />
+            </button>
+        {/if}
+
         <button onclick={display_collabs} aria-label="Share" title="Share"
             class="flex items-center gap-1.5 font-bold py-2 px-3 sm:pl-3 sm:pr-4 bg-yellow-300 hover:bg-yellow-400 text-gray-900 rounded-xl cursor-pointer shrink-0">
             <ShareIcon class="w-5 h-5" aria-hidden="true" />
@@ -220,7 +260,7 @@
         {/if}
     </header>
 
-    <Editor bind:sync_status={sync_status} bind:others={others} doc_id={data.doc_id} ws_token={data.ws_token} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
+    <Editor bind:this={editor} bind:sync_status={sync_status} bind:others={others} doc_id={data.doc_id} ws_token={data.ws_token} bind:doc_name={shown_doc_name} noperm_dialog={no_perm_dialog}/>
 </div>
 
 <!-- Share dialog -->

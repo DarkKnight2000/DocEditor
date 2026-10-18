@@ -44,6 +44,15 @@
 
     /** @type {Quill | null} */
     let quill_instance = null;
+
+    /**
+     * The document's contents as Quill ops, e.g. for downloading it (call through bind:this)
+     * @returns {any[]}
+     */
+    export function get_contents()
+    {
+        return quill_instance?.getContents().ops ?? [];
+    }
     // style of the line(s) at the cursor, shown in the style dropdown ('' when mixed)
     let current_style = $state('text');
     // Outline pane: the document's Titles and Subtitles

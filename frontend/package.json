@@ -26,6 +26,7 @@
 	},
 	"dependencies": {
 		"@iconify-svelte/material-symbols": "^1.0.47",
+		"docx": "9.5.1",
 		"google-auth-library": "^10.6.2",
 		"jose": "^6.2.3",
 		"quill": "^2.0.3",
