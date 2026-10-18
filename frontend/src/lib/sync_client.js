@@ -15,7 +15,23 @@ export function createClientState()
         X: new Delta(),
         Y: new Delta(),
         rev_id: 0,
+        // recent revisions (rev -> the change it made to A), to bring other people's cursors up to date
+        log: new Map(),
     };
+}
+
+// how many recent revisions to keep for cursors; an older cursor is dropped until its next move
+const LOG_SIZE = 200;
+
+/**
+ * @param {ReturnType<typeof createClientState>} state
+ * @param {number} rev
+ * @param {Delta} change
+ */
+function logRevision(state, rev, change)
+{
+    state.log.set(rev, change);
+    if(state.log.size > LOG_SIZE) state.log.delete(state.log.keys().next().value);
 }
 
 /**
@@ -43,6 +59,7 @@ export function applyInit(state, content, rev)
     state.X = new Delta();
     state.Y = new Delta();
     state.rev_id = rev;
+    state.log = new Map();
 }
 
 /**
@@ -75,6 +92,7 @@ export function takeOutgoing(state)
  */
 export function applyAck(state, rev)
 {
+    logRevision(state, rev, state.X);
     state.A = state.A.compose(state.X);
     state.X = new Delta();
     state.rev_id = rev;
@@ -98,9 +116,63 @@ export function applyServerRev(state, B, rev)
     const Yn = B_after_X.transform(state.Y, false);
     const D = state.Y.transform(B_after_X, true);
 
+    logRevision(state, rev, B);
     state.A = state.A.compose(B);
     state.X = Xn;
     state.Y = Yn;
     state.rev_id = rev;
     return D;
+}
+
+// Other people's cursors
+//
+// A cursor travels as a position in the server's document at a revision: { index, length, rev }.
+// The sender maps its on-screen selection back to its latest server revision (A); each receiver
+// brings it forward to its own screen through the revisions since rev and its own unsent edits.
+// After that the editor moves remote cursors along with every change on screen.
+
+/**
+ * The local selection as a position in the server's document, ready to send.
+ * Text typed but not yet saved maps to where it will be inserted.
+ * @param {ReturnType<typeof createClientState>} state
+ * @param {{ index: number, length: number }} range selection on screen
+ */
+export function cursorForServer(state, range)
+{
+    let start = range.index;
+    let end = range.index + range.length;
+    const pending = state.X.compose(state.Y);
+    if(pending.length() !== 0)
+    {
+        // undoing the unsent edits takes screen positions back to A's
+        const back = pending.invert(state.A);
+        start = back.transformPosition(start);
+        end = back.transformPosition(end);
+    }
+    return { index: start, length: Math.max(0, end - start), rev: state.rev_id };
+}
+
+/**
+ * Where another person's cursor is on this screen, or null if it can't be placed
+ * (it refers to a revision this client doesn't have, or one too old to still be logged).
+ * @param {ReturnType<typeof createClientState>} state
+ * @param {{ index: number, length: number, rev: number }} cursor
+ */
+export function cursorFromServer(state, cursor)
+{
+    if(cursor.rev > state.rev_id) return null;
+    let start = cursor.index;
+    let end = cursor.index + cursor.length;
+    for(let rev = cursor.rev + 1; rev <= state.rev_id; rev++)
+    {
+        const change = state.log.get(rev);
+        if(!change) return null;
+        start = change.transformPosition(start);
+        end = change.transformPosition(end);
+    }
+    // the screen also shows this client's unsent edits
+    const pending = state.X.compose(state.Y);
+    start = pending.transformPosition(start);
+    end = pending.transformPosition(end);
+    return { index: start, length: Math.max(0, end - start) };
 }

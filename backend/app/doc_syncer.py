@@ -19,6 +19,8 @@ class MessageType(Enum):
     SERVER_DROP_ACCESS = 6 # Client removed as a collaborator
     SERVER_DOC_LIMIT = 7   # Client's change was rejected: document would exceed its size limit
     SERVER_PRESENCE = 8    # The other people who have the document open
+    CLIENT_CURSOR = 9      # Client's cursor/selection moved (index, length, at revision rev)
+    SERVER_CURSOR = 10     # Another client's cursor, relayed as is; index None when it left
 
 # Maximum length in characters of documents owned by guest users ('known' owners have no limit);
 # self-hosted copies can raise it through the environment
@@ -115,6 +117,31 @@ class DocSyncer:
                 self.user_cards.pop(user_id, None)
             await db_utils.delete_client_rev(db_handle, self.doc_id, client_id)
             await self._send_presence()
+            await self._send_to_others(client_id, {
+                "type": MessageType.SERVER_CURSOR.value, "client": client_id, "index": None
+            })
+
+    async def _send_to_others(self, client_id, message):
+        for other, sock in list(self.clients.items()):
+            if other != client_id:
+                await self._send(sock, message)
+
+    async def relay_cursor(self, client_id: str, index: int, length: int, rev: int):
+        """Passes a client's cursor on to everyone else on the document; nothing is stored.
+        The position is in the document as of revision rev. Holding the lock means every client
+        already has revision rev when the cursor reaches it: a client only knows of rev after
+        add_revision has sent it to everyone, and that sending happens under this lock."""
+        async with self.lock:
+            user_id = self.client_users.get(client_id)
+            if user_id is None:
+                return
+            await self._send_to_others(client_id, {
+                "type": MessageType.SERVER_CURSOR.value,
+                "client": client_id,
+                "user": user_id,
+                "name": self.user_cards.get(user_id, {}).get('name', ''),
+                "index": index, "length": length, "rev": rev,
+            })
 
     async def _send_presence(self):
         """Tells every client who else has the document open: each person once, however many

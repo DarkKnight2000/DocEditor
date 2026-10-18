@@ -40,6 +40,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - The editor shows the sync state: *Connecting*, *Saving*, *Saved*, *Offline*, or an error.
 - A renamed document updates for everyone who has it open.
 - Avatars in the header show who else has the document open right now, with their Google profile pictures.
+- **Live cursors:** everyone sees each other's cursor and selection in that person's colour, with their name. Cursors stay on the right spot while anyone types, because each one is mapped through the same OT revisions as the text.
 
 **Editing**
 - Rich text: bold, italic, underline, strikethrough, superscript and subscript, alignment, lists, links.
@@ -152,10 +153,10 @@ backend and frontend. They run with `make test`.
 |---|---|
 | `backend/tests/test_delta.py` | `compose` and `transform` cases, plus a randomized check that concurrent edits converge |
 | `backend/tests/test_delta_vs_quill.py` | **Differential test:** 6,000 random operations run through the Python port and the real `quill-delta` (in Node), with identical results required |
-| `backend/tests/test_doc_syncer.py` | The sync server against an in-memory fake database: revision numbering, rebasing concurrent edits, retries, history pruning, disconnecting removed collaborators, size limits, who has the document open, and randomized multi-client sessions that must converge |
+| `backend/tests/test_doc_syncer.py` | The sync server against an in-memory fake database: revision numbering, rebasing concurrent edits, retries, history pruning, disconnecting removed collaborators, size limits, who has the document open, relaying cursors, and randomized multi-client sessions that must converge |
 | `backend/tests/test_postgres_utils.py` | Database operations against real Postgres in a throwaway schema: sign-in and email edge cases, renames, sharing, compare-and-swap writes, limits, deletes |
 | `backend/tests/test_auth.py` | API and WebSocket tokens: expiry, wrong audience, wrong document |
-| `frontend/src/lib/sync_client.test.js` | The browser's sync state machine, including randomized sessions where every client's screen must match the server |
+| `frontend/src/lib/sync_client.test.js` | The browser's sync state machine, including randomized sessions where every client's screen must match the server; mapping cursors between revisions and unsent edits |
 | `frontend/src/lib/text_styles.test.js`, `outline.test.js` | Text-style detection and the outline/section tracking |
 | `frontend/src/lib/export_docx.test.js` | Word export: generates real `.docx` files and checks the Word XML for headings, formats, links (only web links kept) and list numbering |
 

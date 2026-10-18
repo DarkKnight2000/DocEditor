@@ -6,7 +6,8 @@
     import "$lib/styles/quill-editor.css";
     import { page } from "$app/state";
     import { dev } from "$app/environment";
-    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit } from "$lib/sync_client.js";
+    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer } from "$lib/sync_client.js";
+    import RemoteCursors from "$lib/RemoteCursors.svelte";
     import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
     import { buildOutline, activeOutlineItem } from "$lib/outline.js";
     import OutlineIcon from "@iconify-svelte/material-symbols/toc-rounded";
@@ -25,16 +26,23 @@
         SERVER_DOC_RENAME: 5,
         SERVER_DROP_ACCESS: 6,
         SERVER_DOC_LIMIT: 7,
-        SERVER_PRESENCE: 8
+        SERVER_PRESENCE: 8,
+        CLIENT_CURSOR: 9,
+        SERVER_CURSOR: 10
     };
 
     const ClientState = createClientState();
+
+    // other people's cursors, as positions on this screen (see RemoteCursors.svelte)
+    /** @type {{ client: string, user: string, name: string, index: number, length: number, moved: number }[]} */
+    let remote_cursors = $state([]);
 
     // document length limit, sent by the server in SERVER_INIT
     let max_chars = $state(Infinity);
     let char_count = $state(0);
     let limit_hit = $state(false);
-    let limit_hit_timer = -1;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let limit_hit_timer;
     function flash_limit()
     {
         limit_hit = true;
@@ -142,7 +150,8 @@
 
     onMount(() => {
         // websocket
-        let interval_id = -1;
+        /** @type {ReturnType<typeof setInterval> | undefined} */
+        let interval_id;
         // same host as the page; an https page must use wss, or the browser blocks the socket
         const ws_protocol = page.url.protocol === 'https:' ? 'wss' : 'ws';
         let ws_server_address = `${ws_protocol}://${page.url.host}/api`;
@@ -160,6 +169,7 @@
         socket.addEventListener("close", () => {
             sync_status = 'Offline';
             others = [];      // no longer know who's here
+            remote_cursors = [];
         });
         socket.addEventListener("error", (err) => {
             console.log("Web socket error: ", err);
@@ -208,12 +218,43 @@
         quill_instance = quill;
         quill_ready = true;
 
+        // Send this cursor to the others when it moves, at most every 150ms, as a position in the
+        // server's document (sync_client.js). Unchanged positions aren't sent again.
+        /** @type {ReturnType<typeof setTimeout> | null} */
+        let cursor_timer = null;
+        let last_cursor = '';
+        function send_cursor()
+        {
+            cursor_timer = null;
+            if(!initialized || socket.readyState !== socket.OPEN) return;
+            const range = quill.getSelection();
+            if(!range) return;      // not focused: the others keep seeing the last position
+            const cursor = cursorForServer(ClientState, range);
+            const key = `${cursor.index}:${cursor.length}:${cursor.rev}`;
+            if(key === last_cursor) return;
+            last_cursor = key;
+            socket.send(JSON.stringify({ type: MessageTypes.CLIENT_CURSOR, ...cursor }));
+        }
+
         // keep the style dropdown in step with the line at the cursor
         quill.on("editor-change", (/** @type {string} */ event_name) => {
             const range = quill.getSelection();
             if(range) current_style = styleOfFormat(quill.getFormat(range));
             if(event_name === "text-change") schedule_outline();
             else update_active_heading();
+            if(cursor_timer === null) cursor_timer = setTimeout(send_cursor, 150);
+        });
+
+        // Other people's cursors move with every change on screen. Edits typed here don't push a
+        // cursor sitting at the same spot (priority), edits from others do, like their own typing.
+        quill.on("text-change", (/** @type {any} */ delta, /** @type {any} */ _old, /** @type {string} */ source) => {
+            if(!remote_cursors.length) return;
+            const mine = source === "user";
+            remote_cursors = remote_cursors.map((c) => {
+                const start = delta.transformPosition(c.index, mine);
+                const end = delta.transformPosition(c.index + c.length, mine);
+                return { ...c, index: start, length: Math.max(0, end - start) };
+            });
         });
 
         // outline pane: remembered choice, otherwise open on wide screens
@@ -292,6 +333,13 @@
                     setTimeout(() => location.reload(), 2000);
                 } else if (recv_data.type == MessageTypes.SERVER_PRESENCE) {
                     others = recv_data.users;
+                } else if (recv_data.type == MessageTypes.SERVER_CURSOR) {
+                    // another tab's cursor moved, or (index null) it closed
+                    const rest = remote_cursors.filter((c) => c.client !== recv_data.client);
+                    const at = recv_data.index == null ? null : cursorFromServer(ClientState, recv_data);
+                    remote_cursors = at
+                        ? [...rest, { client: recv_data.client, user: recv_data.user, name: recv_data.name, ...at, moved: Date.now() }]
+                        : recv_data.index == null ? rest : remote_cursors;
                 } else {
                     console.warn("Unknown message from server: ", recv_data);
                 }
@@ -422,8 +470,11 @@
 
         <!-- grey desk with a white page on it -->
         <div class="flex-1 min-w-0 overflow-y-auto bg-gray-50 px-3 sm:px-6 py-6 sm:py-10">
-            <div class="max-w-3xl mx-auto bg-white rounded-sm border border-gray-200 shadow-sm min-h-full">
+            <div class="relative max-w-3xl mx-auto bg-white rounded-sm border border-gray-200 shadow-sm min-h-full">
                 <div id="editor" class="text-black text-left"></div>
+                {#if quill_ready}
+                    <RemoteCursors quill={quill_instance} cursors={remote_cursors} />
+                {/if}
             </div>
         </div>
     </div>

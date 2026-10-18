@@ -13,6 +13,7 @@ from tests.fakes import FakeDB, FakeSocket, SimClient, normalize, random_edit, t
 INIT, ACK, REV, DROP, LIMIT, PRESENCE = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
                                          MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value,
                                          MessageType.SERVER_DOC_LIMIT.value, MessageType.SERVER_PRESENCE.value)
+CURSOR = MessageType.SERVER_CURSOR.value
 
 
 def run(coro):
@@ -214,6 +215,46 @@ def test_removed_collaborator_disappears_from_presence(db):
         assert others(owner) == ['Collab']
         await syncer.disconnect_user('collab', None)
         assert others(owner) == []
+    run(scenario())
+
+
+def test_cursor_is_relayed_to_everyone_else_with_the_senders_name(db):
+    db.add_doc(text='hello')
+    db.user_cards['ann'] = {'name': 'Ann', 'picture': None}
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        ann = await join(syncer, 'a1', 'ann')
+        bob = await join(syncer, 'b1', 'bob')
+        ann_phone = await join(syncer, 'a2', 'ann')     # Ann's other tab sees her cursor too
+        await syncer.relay_cursor('a1', 2, 3, 0)
+        expected = {'type': CURSOR, 'client': 'a1', 'user': 'ann', 'name': 'Ann', 'index': 2, 'length': 3, 'rev': 0}
+        assert bob.of_type(CURSOR) == [expected]
+        assert ann_phone.of_type(CURSOR) == [expected]
+        assert ann.of_type(CURSOR) == [], 'never sent back to its own tab'
+    run(scenario())
+
+
+def test_leaving_removes_the_cursor_for_the_others(db):
+    db.add_doc()
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        ann = await join(syncer, 'a1', 'ann')
+        await join(syncer, 'b1', 'bob')
+        await syncer.disconnect('b1', None)
+        assert ann.of_type(CURSOR) == [{'type': CURSOR, 'client': 'b1', 'index': None}]
+    run(scenario())
+
+
+def test_cursor_of_a_client_that_already_left_is_dropped(db):
+    db.add_doc()
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        ann = await join(syncer, 'a1', 'ann')
+        await syncer.relay_cursor('gone', 0, 0, 0)
+        assert ann.of_type(CURSOR) == []
     run(scenario())
 
 

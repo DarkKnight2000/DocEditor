@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Delta from 'quill-delta';
-import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit } from './sync_client.js';
+import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer } from './sync_client.js';
 
 /** Document the client should be showing */
 const docOf = (/** @type {any} */ s) => s.A.compose(s.X).compose(s.Y);
@@ -184,4 +184,73 @@ test('random concurrent editing converges for every client, on screen and in sta
             sameDoc(docOf(c.s), server.head);
         }
     }
+});
+
+// --- other people's cursors ------------------------------------------------------
+
+/** Client showing `text` (plus Quill's final newline) at revision rev, with nothing unsent */
+function clientAt(text, rev)
+{
+    const s = createClientState();
+    applyInit(s, [{ insert: text + '\n' }], rev);
+    return s;
+}
+
+test('with nothing unsent, a cursor is sent and placed as is', () => {
+    const sender = clientAt('hello world', 4);
+    const cursor = cursorForServer(sender, { index: 6, length: 5 });
+    assert.deepEqual(cursor, { index: 6, length: 5, rev: 4 });
+    assert.deepEqual(cursorFromServer(clientAt('hello world', 4), cursor), { index: 6, length: 5 });
+});
+
+test("the sender's unsent text maps to where it will be inserted", () => {
+    const sender = clientAt('hello', 1);
+    applyLocalChange(sender, new Delta().retain(5).insert(' there'));   // typed, not sent yet
+    takeOutgoing(sender);                                                 // in flight
+    applyLocalChange(sender, new Delta().retain(11).insert('!'));         // typed after sending
+    // cursor after "hello there!" on the sender's screen = after "hello" in the saved document
+    assert.deepEqual(cursorForServer(sender, { index: 12, length: 0 }), { index: 5, length: 0, rev: 1 });
+});
+
+test('a selection over unsent text shrinks to its insertion point, the rest is kept', () => {
+    const sender = clientAt('abcdef', 0);
+    applyLocalChange(sender, new Delta().retain(3).insert('XYZ'));        // abcXYZdef
+    // selecting "cXYZd" (2..7) covers "cd" in the saved document
+    assert.deepEqual(cursorForServer(sender, { index: 2, length: 5 }), { index: 2, length: 2, rev: 0 });
+});
+
+test('a receiver further ahead moves the cursor through the revisions since', () => {
+    const receiver = clientAt('hello world', 3);
+    applyServerRev(receiver, new Delta().insert('>> '), 4);               // someone typed at the start
+    applyLocalChange(receiver, new Delta().retain(5).insert('[me]'));     // own edit, sent and saved
+    takeOutgoing(receiver);
+    applyAck(receiver, 5);
+    // a cursor on "world" (6..11) as of revision 3
+    assert.deepEqual(cursorFromServer(receiver, { index: 6, length: 5, rev: 3 }), { index: 13, length: 5 });
+});
+
+test("the receiver's own unsent edits move the cursor too", () => {
+    const receiver = clientAt('hello world', 2);
+    applyLocalChange(receiver, new Delta().insert('Hey, '));               // not sent yet
+    assert.deepEqual(cursorFromServer(receiver, { index: 6, length: 0, rev: 2 }), { index: 11, length: 0 });
+});
+
+test('cursors from unknown or forgotten revisions are not placed', () => {
+    const receiver = clientAt('text', 5);
+    assert.equal(cursorFromServer(receiver, { index: 0, length: 0, rev: 6 }), null, 'from the future');
+    assert.equal(cursorFromServer(receiver, { index: 0, length: 0, rev: 2 }), null, 'revisions 3-5 not logged');
+});
+
+test('a cursor sent with unsent text lands after that text once it arrives', () => {
+    // sender typed "big " before "cat" and its cursor sits after it; the receiver hasn't got the text yet
+    const sender = clientAt('the cat', 0);
+    applyLocalChange(sender, new Delta().retain(4).insert('big '));
+    const cursor = cursorForServer(sender, { index: 8, length: 0 });
+    const receiver = clientAt('the cat', 0);
+    let { index } = cursorFromServer(receiver, cursor);
+    assert.equal(index, 4, 'at the insertion point while the text is on its way');
+    // the text arrives; the editor moves remote cursors along with each screen change
+    const shown = applyServerRev(receiver, new Delta().retain(4).insert('big '), 1);
+    index = shown.transformPosition(index);
+    assert.equal(index, 8, "after 'big ', like on the sender's screen");
 });

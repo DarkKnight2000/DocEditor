@@ -190,6 +190,11 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
                 if not isinstance(C, list) or not isinstance(r_c, int) or isinstance(r_c, bool):
                     break
                 await doc_syncer.add_revision(db_handle, my_id, C, r_c)
+            elif data["type"] == MessageType.CLIENT_CURSOR.value:
+                position = [data.get(k) for k in ("index", "length", "rev")]
+                # malformed cursors are ignored rather than closing the socket: they're only cosmetic
+                if all(isinstance(v, int) and not isinstance(v, bool) and 0 <= v < 10_000_000 for v in position):
+                    await doc_syncer.relay_cursor(my_id, *position)
     except WebSocketDisconnect:
         pass
     finally:
