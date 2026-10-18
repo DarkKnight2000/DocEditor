@@ -7,7 +7,7 @@
   <rect x="17" y="24" width="20" height="5" rx="2.5" fill="#ffffff"/>
   <rect x="17" y="35" width="13" height="5" rx="2.5" fill="#ffffff"/>
   <rect x="17" y="46" width="26" height="5" rx="2.5" fill="#ffffff"/>
-  <!-- two people's cursors -->
-  <rect x="40" y="21" width="4" height="11" rx="2" fill="#2563eb"/>
-  <rect x="33" y="32" width="4" height="11" rx="2" fill="#db2777"/>
+  <!-- two people's cursors: blue after the first line, red before the second, far apart -->
+  <rect x="40.75" y="21" width="2.5" height="11" rx="1.25" fill="#2563eb"/>
+  <rect x="12.75" y="32" width="2.5" height="11" rx="1.25" fill="#db2777"/>
 </svg>

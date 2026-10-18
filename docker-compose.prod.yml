@@ -1,0 +1,52 @@
+# Production settings, layered on top of docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build   (or: make deploy)
+#
+# Every service reads its own *.prod env file, so production has its own Google OAuth client,
+# secrets and database password, separate from the development ones in the plain .env files.
+
+# keep container logs from filling the disk
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+
+  caddy:
+    ports: !override
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"     # HTTP/3
+    env_file:
+      - ./caddy/caddy.env.prod     # SITE_ADDRESS: the domain to serve and get a certificate for
+    volumes:
+      # certificates and Caddy's state; keeping them avoids hitting Let's Encrypt's rate limits on restarts
+      - caddy_data:/data
+      - caddy_config:/config
+    restart: unless-stopped
+    logging: *logging
+
+  frontend:
+    env_file: !override
+      - ./frontend/.env.prod
+    restart: unless-stopped
+    logging: *logging
+
+  backend:
+    env_file: !override
+      - ./backend/.env.prod
+    restart: unless-stopped
+    logging: *logging
+
+  postgres:
+    # only the backend talks to the database, over the internal Docker network
+    ports: !reset []
+    env_file: !override
+      - ./postgres/postgres.env.prod
+    restart: unless-stopped
+    logging: *logging
+
+volumes:
+  caddy_data:
+  caddy_config:

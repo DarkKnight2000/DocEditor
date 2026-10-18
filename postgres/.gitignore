@@ -1,1 +1,2 @@
-postgres.env
+postgres.env*
+!postgres.env.example

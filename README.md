@@ -64,7 +64,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 Browser (SvelteKit app + Quill editor)
    │   HTTPS                          WebSocket /api/edit-socket/{doc}
    ▼                                          │
-Nginx ─────────────────────────────────────────┤
+Caddy (HTTPS) ────────────────────────────────┤
    ├── /*      ──► SvelteKit server :3000     │   pages, sign-in, cookies,
    │                  │  signed bearer token   │   server-side API calls
    │                  ▼                        ▼
@@ -80,8 +80,19 @@ Nginx ────────────────────────�
 | Backend | FastAPI (Python 3.12, asyncio), asyncpg |
 | Database | PostgreSQL 18 |
 | Auth | Google Identity Services, JWTs (HS256, `jose`) |
-| Infrastructure | Docker Compose, Nginx reverse proxy |
+| Infrastructure | Docker Compose, Caddy (reverse proxy, automatic HTTPS) |
 | Testing | pytest, Node's built-in test runner (`node --test`) |
+
+### Deployment
+
+- One `docker compose` setup for development, plus `docker-compose.prod.yml` layered on top for production.
+- Caddy serves the site over HTTPS and gets and renews its Let's Encrypt certificate itself. The same
+  Caddyfile serves plain HTTP in development.
+- Development and production have separate env files, with a separate Google OAuth client and separate secrets
+  in each, as Google recommends.
+- In production the database isn't reachable from outside, containers restart on failure, and logs are rotated.
+
+See [SELF_HOSTING.md](SELF_HOSTING.md) for the steps.
 
 ### How syncing works
 
@@ -234,3 +245,8 @@ In short:
   - On later boots it skips all of that and starts Postgres on the existing data. Changing those variables
     has no effect unless the volume is wiped. Schema changes since then go through a small migration that
     runs when the backend starts.
+- Compose override files merge lists like `env_file:` and `ports:` instead of replacing them. A production
+  override needs `!override` (replace the list) or `!reset` (clear it), or it would load the development
+  env files too and keep the database port published.
+- An `https` page can't open a `ws://` socket: browsers block it as mixed content. The socket URL has to
+  follow the page's protocol (`wss://` on HTTPS).

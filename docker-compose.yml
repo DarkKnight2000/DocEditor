@@ -2,20 +2,17 @@ name: DocEditor
 
 services:
 
-  nginx:
-    image: nginx:alpine
+  # Reverse proxy (caddy/Caddyfile). Plain HTTP on localhost:8000 here; docker-compose.prod.yml
+  # gives it the domain, ports 80/443 and automatic HTTPS.
+  caddy:
+    image: caddy:2.10.2-alpine
     ports:
       - "8000:80"
-      # - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       - frontend
       - backend
-    # develop:
-    #   watch:
-    #     - action: rebuild
-    #       path: ./nginx/nginx.conf
 
   frontend:
     build:
@@ -59,6 +56,7 @@ services:
 
   postgres:
     image: postgres:18.6-alpine3.24
+    # published so a backend running outside Docker (uvicorn) can reach it; not in production
     ports:
       - "5432:5432"
     env_file:

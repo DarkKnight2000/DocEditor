@@ -1,0 +1,16 @@
+# Reverse proxy in front of the app. /api (REST and the edit WebSocket) goes to FastAPI, everything
+# else to SvelteKit. Caddy passes WebSockets through and sets the X-Forwarded-* headers itself.
+#
+# SITE_ADDRESS is the site's domain in production (from caddy/caddy.env.prod), and Caddy then gets
+# and renews its HTTPS certificate automatically. Unset in development, it serves plain HTTP on :80.
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
+}

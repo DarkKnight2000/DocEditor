@@ -134,7 +134,9 @@
     onMount(() => {
         // websocket
         let interval_id = -1;
-        let ws_server_address = `ws://${page.url.host}/api`;
+        // same host as the page; an https page must use wss, or the browser blocks the socket
+        const ws_protocol = page.url.protocol === 'https:' ? 'wss' : 'ws';
+        let ws_server_address = `${ws_protocol}://${page.url.host}/api`;
         if(dev)
         {
             ws_server_address = `ws://localhost:8000/api`;
