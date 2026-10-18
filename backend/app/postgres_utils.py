@@ -63,18 +63,23 @@ def parse_timestamp(ts_str: str) -> datetime:
 
 async def db_connect(retries: int = 10, delay: float = 1.5) -> DB_Handle:
     dsn = os.environ.get('POSTGRES_DSN')
-    if not dsn:
-        host = os.environ['POSTGRES_HOST']
-        port = os.environ.get('POSTGRES_PORT', '5432')
-        user = os.environ['POSTGRES_USER']
-        password = os.environ['POSTGRES_PASSWORD']
-        database = os.environ.get('POSTGRES_DB', 'docsdb')
-        dsn = f'postgresql://{user}:{password}@{host}:{port}/{database}'
+    if dsn:
+        connect_args = {'dsn': dsn}
+    else:
+        # Passed separately rather than joined into a postgresql:// URL, so a password containing
+        # characters like / @ : # works as is
+        connect_args = {
+            'host': os.environ['POSTGRES_HOST'],
+            'port': int(os.environ.get('POSTGRES_PORT', '5432')),
+            'user': os.environ['POSTGRES_USER'],
+            'password': os.environ['POSTGRES_PASSWORD'],
+            'database': os.environ.get('POSTGRES_DB', 'docsdb'),
+        }
 
     last_error = None
     for attempt in range(1, retries + 1):
         try:
-            pool = await asyncpg.create_pool(dsn=dsn, min_size=1, max_size=10, command_timeout=5)
+            pool = await asyncpg.create_pool(**connect_args, min_size=1, max_size=10, command_timeout=5)
             async with pool.acquire() as conn:
                 await conn.execute('SELECT 1')
             return pool
