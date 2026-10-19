@@ -10,7 +10,6 @@
     import RemoteCursors from "$lib/RemoteCursors.svelte";
     import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
     import { buildOutline, activeOutlineItem } from "$lib/outline.js";
-    import { paginate } from "$lib/pagination.js";
     import OutlineIcon from "@iconify-svelte/material-symbols/toc-rounded";
     import ClosePaneIcon from "@iconify-svelte/material-symbols/left-panel-close-outline-rounded";
 
@@ -118,17 +117,6 @@
     // The style dropdown is only rendered once Quill exists: Quill's theme replaces every <select>
     // in the toolbar with its own picker when it starts, which would hide our option labels
     let quill_ready = $state(false);
-
-    // Pages (pagination.js): A4-shaped pages at the sheet's width, from tablet width up; phones scroll
-    // one continuous page. Blocks are pushed to the next page through a stylesheet of their own, since
-    // changing Quill's DOM would count as an edit.
-    const PAGE_GAP = 20;
-    /** @type {HTMLDivElement} the white sheet the pages are drawn on */
-    let sheet;
-    /** @type {HTMLDivElement} the scrolling area around it */
-    let desk;
-    /** @type {import('$lib/pagination.js').PageBreak[]} */
-    let page_breaks = $state([]);
 
     /**
      * Applies a text style (Title, Subtitle, Text, Tiny) to every line touched by the selection
@@ -262,66 +250,9 @@
             if(heading_style.textContent !== rules) heading_style.textContent = rules;
         }
 
-        const page_style = document.createElement('style');
-        document.head.appendChild(page_style);
-        const wide = matchMedia('(min-width: 640px)');
-        /** @type {ReturnType<typeof setTimeout> | null} */
-        let page_timer = null;
-        function layout_pages()
-        {
-            page_timer = null;
-            // heading spacing first: it changes where everything below sits
-            space_headings();
-            // measuring needs the blocks where they'd be without pushes; restore the scroll position
-            // afterwards, since the page is briefly shorter
-            const scroll = desk.scrollTop;
-            page_style.textContent = '';
-            if(!wide.matches)
-            {
-                page_breaks = [];
-                return;
-            }
-            const base = sheet.getBoundingClientRect();
-            const page_height = Math.round(sheet.clientWidth * 297 / 210);     // A4
-            const padding = parseFloat(getComputedStyle(quill.root).paddingTop);
-            // paragraphs and headings, and each item of a list (lists are one element in Quill)
-            /** @type {{ el: Element, selector: string }[]} */
-            const units = [];
-            [...quill.root.children].forEach((el, i) => {
-                const selector = `#editor .ql-editor > :nth-child(${i + 1})`;
-                if(el.tagName === 'OL' || el.tagName === 'UL')
-                {
-                    [...el.children].forEach((item, j) => units.push({ el: item, selector: `${selector} > :nth-child(${j + 1})` }));
-                }
-                else units.push({ el, selector });
-            });
-            // a Title or Subtitle line stays on the page of the block after it
-            const layout = paginate(
-                units.map(({ el }) => {
-                    const r = el.getBoundingClientRect();
-                    return { top: r.top - base.top, height: r.height, keepWithNext: heading_level(el) !== null };
-                }),
-                { pageHeight: page_height, padding, gap: PAGE_GAP });
-            page_style.textContent = layout.pushes
-                .map((p) => `${units[p.index].selector} { padding-top: ${p.px}px !important; }`)
-                .concat(`#editor .ql-editor { min-height: ${layout.height}px !important; }`)
-                .join('\n');
-            page_breaks = layout.breaks;
-            desk.scrollTop = scroll;
-        }
-        const schedule_pages = () => {
-            if(page_timer === null) page_timer = setTimeout(layout_pages, 30);
-        };
-        quill.on("text-change", schedule_pages);
-        // re-lay out when the sheet's width changes (window size, outline pane), not its height, which
-        // the layout itself changes
-        let sheet_width = 0;
-        const sheet_observer = new ResizeObserver(() => {
-            if(sheet.clientWidth !== sheet_width) { sheet_width = sheet.clientWidth; schedule_pages(); }
-        });
-        sheet_observer.observe(sheet);
-        wide.addEventListener('change', schedule_pages);
-        document.fonts?.ready.then(schedule_pages);
+        // Quill updates the page before it reports a change, so spacing the headings right away means the
+        // screen never shows the old spacing on the new lines (e.g. after Enter shifts every line's position)
+        quill.on("text-change", space_headings);
 
         // Send this cursor to the others when it moves, at most every 150ms, as a position in the
         // server's document (sync_client.js). Unchanged positions aren't sent again.
@@ -458,10 +389,6 @@
         return () => {
             clearInterval(interval_id);
             socket.close();
-            sheet_observer.disconnect();
-            wide.removeEventListener('change', schedule_pages);
-            if(page_timer !== null) clearTimeout(page_timer);
-            page_style.remove();
             heading_style.remove();
         };
     });
@@ -579,17 +506,9 @@
         {/if}
 
         <!-- grey desk with a white page on it -->
-        <div bind:this={desk} class="flex-1 min-w-0 overflow-y-auto bg-gray-50 px-3 sm:px-6 py-6 sm:py-10">
-            <div bind:this={sheet} class="relative max-w-3xl mx-auto bg-white rounded-sm border border-gray-200 shadow-sm min-h-full">
+        <div class="flex-1 min-w-0 overflow-y-auto bg-gray-50 px-3 sm:px-6 py-6 sm:py-10">
+            <div class="relative max-w-3xl mx-auto bg-white rounded-sm border border-gray-200 shadow-sm min-h-full">
                 <div id="editor" class="text-black text-left"></div>
-                <!-- the desk showing between pages, or a dashed line where a very tall block crosses a page edge -->
-                {#each page_breaks as page_break}
-                    {#if page_break.cut}
-                        <div class="absolute inset-x-0 border-t border-dashed border-gray-300 pointer-events-none" style="top:{page_break.y}px" aria-hidden="true"></div>
-                    {:else}
-                        <div class="absolute -inset-x-px bg-gray-50 border-y border-gray-200 pointer-events-none" style="top:{page_break.y}px; height:{PAGE_GAP}px" aria-hidden="true"></div>
-                    {/if}
-                {/each}
                 {#if quill_ready}
                     <RemoteCursors quill={quill_instance} cursors={remote_cursors} />
                 {/if}
