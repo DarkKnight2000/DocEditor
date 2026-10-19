@@ -58,21 +58,8 @@
     font-size: 0.85em;
 }
 
-/* space around Title and Subtitle lines, more above (new section) than below (its text) */
-.ql-editor p:has(.ql-size-huge) {
-    margin-top: 1.75rem;
-    margin-bottom: 0.75rem;
-}
-
-.ql-editor p:has(.ql-size-large):not(:has(.ql-size-huge)) {
-    margin-top: 1.25rem;
-    margin-bottom: 0.5rem;
-}
-
-/* a heading at the very top of the document sits flush with the page margin */
-.ql-editor > p:first-child:has(.ql-size-huge, .ql-size-large) {
-    margin-top: 0;
-}
+/* the space around Title and Subtitle lines is set in Editor.svelte (space_headings), which can tell
+   a line that starts with big text from a normal line with a big word in it */
 
 /* --- the toolbar ------------------------------------------------------------ */
 
