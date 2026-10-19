@@ -13,11 +13,15 @@
 		"test": "node --test \"src/**/*.test.js\""
 	},
 	"devDependencies": {
+		"@iconify-svelte/material-symbols": "^1.0.47",
 		"@sveltejs/adapter-auto": "^7.0.1",
 		"@sveltejs/adapter-node": "^5.5.4",
 		"@sveltejs/kit": "^2.57.0",
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@tailwindcss/vite": "^4.2.2",
+		"docx": "9.5.1",
+		"quill": "^2.0.3",
+		"quill-delta": "^5.1.0",
 		"svelte": "5.57.1",
 		"svelte-check": "^4.4.6",
 		"tailwindcss": "^4.2.2",
@@ -25,12 +29,8 @@
 		"vite": "^8.0.7"
 	},
 	"dependencies": {
-		"@iconify-svelte/material-symbols": "^1.0.47",
-		"docx": "9.5.1",
 		"google-auth-library": "^10.6.2",
-		"jose": "^6.2.3",
-		"quill": "^2.0.3",
-		"quill-delta": "^5.1.0"
+		"jose": "^6.2.3"
 	},
 	"overrides": {
 		"devalue": "5.9.4"

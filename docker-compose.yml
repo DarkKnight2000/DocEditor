@@ -14,9 +14,14 @@ services:
       - frontend
       - backend
 
+  # The frontend and backend images are built here, and named for Docker Hub so "make push" can push
+  # them. Production pulls them instead of building (docker-compose.prod.yml).
   frontend:
     build:
       context: ./frontend
+    image: ${IMAGE_PREFIX:-rishikaley72}/raya-frontend:${TAG:-latest}
+    # always build from this checkout; never use an image from Docker Hub in development
+    pull_policy: build
     # expose doesn't open the port, it is only for documentation
     expose:
       - "3000"
@@ -39,6 +44,8 @@ services:
   backend:
     build:
       context: ./backend
+    image: ${IMAGE_PREFIX:-rishikaley72}/raya-backend:${TAG:-latest}
+    pull_policy: build
     expose:
       - "8000"
     env_file:

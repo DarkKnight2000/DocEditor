@@ -3,7 +3,8 @@ FROM node:24.16-slim AS builder
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm install
+# exactly the versions in package-lock.json
+RUN npm ci
 
 COPY . .
 
@@ -18,9 +19,12 @@ FROM node:24.16-slim
 
 WORKDIR /app
 
+# The build bundles everything from devDependencies (Svelte, Quill, the icons...), so the server only
+# needs the few runtime dependencies; installing just those keeps the image small to push and pull.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+
 COPY --from=builder /app/build build
-COPY --from=builder /app/node_modules node_modules/
-COPY package.json .
 
 ENV PROTOCOL_HEADER=x-forwarded-proto
 ENV HOST_HEADER=x-forwarded-host

@@ -29,6 +29,10 @@ Docker build contexts. The production names aren't `.env.production`, so Vite ne
 production: it switches every service to its `.prod` env file, gives Caddy the domain with ports 80 and 443,
 stops publishing the Postgres port, and adds restart policies and log rotation.
 
+The server never builds images: a 1 GB server is slow at it and can run out of memory. Instead, you build
+the frontend and backend images on your own computer and push them to Docker Hub, and the server pulls them
+(see [Deploying to a server](#deploying-to-a-server)).
+
 ### Google sign-in: one OAuth client per environment
 
 Google recommends keeping testing and production apart, ideally as separate Google Cloud projects. Then a
@@ -158,7 +162,8 @@ Add `PROD=1` to run a command against production, for example `make logs PROD=1`
 | `make ps` | Show running containers |
 | `make clean` | Stop containers, **remove volumes (all data)** and dangling images |
 | `make test` | Run backend and frontend tests |
-| `make deploy` | Build and start production in the background |
+| `make push` | Build the frontend and backend images and push them to Docker Hub (on your computer) |
+| `make deploy` | Pull the images and start production in the background (on the server) |
 | `make upgrade-user EMAIL=…` | Remove the guest limits from an account |
 
 ## Tests
@@ -184,13 +189,34 @@ This needs `uv`, Node.js, and `npm install` run in `frontend/`. Pytest runs thro
 ### 1. Server and domain
 
 - **Server:** a Linux server with Docker Engine, the Compose plugin, Git and Make. A small VPS with
-  1 GB of RAM is enough for a few users.
+  1 GB of RAM is enough for a few users, since it doesn't build anything.
 - **DNS:** point the domain (an `A` record, and `AAAA` for IPv6) at the server.
 - **Firewall:** open ports 80 and 443, including UDP 443 for HTTP/3. Caddy uses port 80 to get the
   certificate and to redirect HTTP to HTTPS.
 - **Database:** nothing else needs to be reachable from outside. Postgres isn't published in production.
 
-### 2. Configure
+### 2. Docker Hub
+
+The images go through [Docker Hub](https://hub.docker.com). They contain no secrets (everything sensitive
+is in the `.prod` env files on the server), so public repositories are fine. The image names come from
+`docker-compose.yml`: `rishikaley72/raya-frontend` and `rishikaley72/raya-backend`. To use your own
+account, set `IMAGE_PREFIX=<your username>` wherever you run `make push` and `make deploy`.
+
+1. Create two access tokens under Account settings → Personal access tokens: one with *Read & Write*
+   access for your computer and one with *Read-only* access for the server.
+2. Log in on each machine with its token as the password:
+   ```bash
+   docker login -u rishikaley72
+   ```
+3. On your computer, after committing your changes, build and push:
+   ```bash
+   make push
+   ```
+   On Windows, MinGW's make is `mingw32-make push`; it works from PowerShell, cmd or Git Bash. The images
+   are built for `linux/amd64` and tagged with the commit (e.g. `1a2b3c4`) and `latest`. The first push
+   uploads a few hundred MB; later ones only the layers that changed.
+
+### 3. Configure
 
 On the server:
 
@@ -211,13 +237,13 @@ Fill them in:
 
 Keep the files readable only by you, for example `chmod 600 */.env.prod */*.env.prod`.
 
-### 3. Start
+### 4. Start
 
 ```bash
 make deploy
 ```
 
-The first start takes a few minutes, to build the images. Caddy then gets a certificate from Let's Encrypt,
+This pulls the images and starts everything. Caddy then gets a certificate from Let's Encrypt,
 and the site is live at `https://<your domain>`. To check on it:
 
 ```bash
@@ -227,12 +253,27 @@ make logs PROD=1
 
 ### Updating
 
+On your computer, commit and push the code, then push the images:
+
+```bash
+make push
+```
+
+On the server:
+
 ```bash
 git pull
 make deploy
 ```
 
-Only the images whose code changed are rebuilt. The backend applies any database changes itself when it starts.
+`git pull` brings the Compose files and config that go with the new images. The backend applies any
+database changes itself when it starts.
+
+To go back to an earlier version, or to pin one, deploy its commit's images:
+
+```bash
+make deploy TAG=1a2b3c4
+```
 
 ### Backups
 

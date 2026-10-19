@@ -1,4 +1,5 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Header, Response, HTTPException, Depends, APIRouter
+from starlette.websockets import WebSocketState
 from contextlib import asynccontextmanager
 from app.doc_syncer import DocSyncer, MessageType, MAX_DOC_CHARS
 from pydantic import BaseModel
@@ -197,6 +198,12 @@ async def edit_socket(websocket: WebSocket, doc_id: str):
                     await doc_syncer.relay_cursor(my_id, *position)
     except WebSocketDisconnect:
         pass
+    except RuntimeError:
+        # A message sent to this client after it left (presence, a cursor...) fails quietly in DocSyncer,
+        # but marks the socket closed, so the next read raises RuntimeError instead of WebSocketDisconnect.
+        # That's just a disconnect; anything else is a real error.
+        if websocket.application_state != WebSocketState.DISCONNECTED:
+            raise
     finally:
         await doc_syncer.disconnect(my_id, db_handle)
         if not doc_syncer.clients and active_docs.get(doc_id) is doc_syncer:

@@ -1,5 +1,9 @@
 # Production settings, layered on top of docker-compose.yml:
-#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build   (or: make deploy)
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d   (or: make deploy)
+#
+# The server doesn't build anything: the frontend and backend images are built on a development
+# machine and pushed to Docker Hub (make push), and pulled here. TAG picks a version
+# (a commit hash); it defaults to latest.
 #
 # Every service reads its own *.prod env file, so production has its own Google OAuth client,
 # secrets and database password, separate from the development ones in the plain .env files.
@@ -28,12 +32,16 @@ services:
     logging: *logging
 
   frontend:
+    build: !reset null
+    pull_policy: missing
     env_file: !override
       - ./frontend/.env.prod
     restart: unless-stopped
     logging: *logging
 
   backend:
+    build: !reset null
+    pull_policy: missing
     env_file: !override
       - ./backend/.env.prod
     restart: unless-stopped
