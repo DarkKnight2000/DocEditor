@@ -38,6 +38,14 @@ export function SetDirty(arg1) {
   return window['go']['main']['App']['SetDirty'](arg1);
 }
 
+export function ShowDocumentWindow() {
+  return window['go']['main']['App']['ShowDocumentWindow']();
+}
+
+export function ShowHomeWindow() {
+  return window['go']['main']['App']['ShowHomeWindow']();
+}
+
 export function ShowInFolder(arg1) {
   return window['go']['main']['App']['ShowInFolder'](arg1);
 }

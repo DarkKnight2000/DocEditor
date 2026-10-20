@@ -2,7 +2,7 @@
     import { onMount } from 'svelte';
     import DesktopEditor from './DesktopEditor.svelte';
     import logo from '$web_static/favicon.svg';
-    import { StartupFile, SetDirty, Quit, OpenDialog, Open, Save, SaveAs, ExportDocx, RecentFiles, ForgetRecent, ShowInFolder } from '../wailsjs/go/main/App.js';
+    import { StartupFile, SetDirty, Quit, OpenDialog, Open, Save, SaveAs, ExportDocx, RecentFiles, ForgetRecent, ShowInFolder, ShowDocumentWindow, ShowHomeWindow } from '../wailsjs/go/main/App.js';
     import { EventsOn, WindowSetTitle } from '../wailsjs/runtime/runtime.js';
 
     import AddIcon from '@iconify-svelte/material-symbols/add-rounded';
@@ -78,6 +78,8 @@
         edits = saved_edits = 0;
         autosave_failed = false;
         doc_key++;
+        // documents fill the screen; the start screen has a small window
+        ShowDocumentWindow();
     }
 
     function on_edit()
@@ -266,6 +268,7 @@
         if(busy || !(await can_leave())) return;
         cancel_autosave();
         doc = null;
+        ShowHomeWindow();
         load_recent();
     }
 

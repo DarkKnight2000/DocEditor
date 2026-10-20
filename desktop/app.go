@@ -157,6 +157,25 @@ func (a *App) ExportDocx(name string, docxBase64 string) (string, error) {
 	return path, writeFileAtomic(path, data)
 }
 
+// The start screen opens in a small window; documents fill the screen (maximised, keeping the title
+// bar and taskbar, as other editors open documents)
+const (
+	homeWidth  = 760
+	homeHeight = 600
+)
+
+// ShowDocumentWindow maximises the window for a document
+func (a *App) ShowDocumentWindow() {
+	runtime.WindowMaximise(a.ctx)
+}
+
+// ShowHomeWindow returns the window to the start screen's size, in the middle of the screen
+func (a *App) ShowHomeWindow() {
+	runtime.WindowUnmaximise(a.ctx)
+	runtime.WindowSetSize(a.ctx, homeWidth, homeHeight)
+	runtime.WindowCenter(a.ctx)
+}
+
 // RecentFiles lists recently used documents that still exist, newest first
 func (a *App) RecentFiles() []RecentFile {
 	return a.recent.existing()

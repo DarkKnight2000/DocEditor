@@ -17,12 +17,20 @@ var assets embed.FS
 func main() {
 	app := NewApp(os.Args[1:])
 
+	// a file to open (e.g. a double-clicked .raya file) starts maximised, as documents are shown;
+	// otherwise the start screen's small window
+	startState := options.Normal
+	if app.startupFile != "" {
+		startState = options.Maximised
+	}
+
 	err := wails.Run(&options.App{
-		Title:     "Raya",
-		Width:     1200,
-		Height:    840,
-		MinWidth:  640,
-		MinHeight: 480,
+		Title:            "Raya",
+		Width:            homeWidth,
+		Height:           homeHeight,
+		MinWidth:         640,
+		MinHeight:        480,
+		WindowStartState: startState,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

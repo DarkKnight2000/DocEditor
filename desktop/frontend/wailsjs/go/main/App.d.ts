@@ -21,6 +21,10 @@ export function SaveAs(arg1:string,arg2:jsontext.Value,arg3:boolean):Promise<mai
 
 export function SetDirty(arg1:boolean):Promise<void>;
 
+export function ShowDocumentWindow():Promise<void>;
+
+export function ShowHomeWindow():Promise<void>;
+
 export function ShowInFolder(arg1:string):Promise<void>;
 
 export function StartupFile():Promise<string>;
