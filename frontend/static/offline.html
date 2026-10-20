@@ -1,0 +1,38 @@
+<!doctype html>
+<!-- Shown by the service worker (src/service-worker.js) when a page can't load because there's no connection.
+     Everything is inline: nothing else can be fetched while offline. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Raya - Offline</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <style>
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: #f9fafb; color: #111827; text-align: center; padding: 0 16px;
+            font-family: Nunito, ui-sans-serif, system-ui, sans-serif;
+        }
+        img { width: 64px; height: 64px; }
+        h1 { font-size: 1.5rem; margin: 16px 0 8px; }
+        p { color: #4b5563; margin: 0 0 24px; }
+        button {
+            font: inherit; font-weight: 600; padding: 8px 20px; border: none; border-radius: 8px;
+            background: #ffd60a; color: #111827; cursor: pointer;
+        }
+        button:hover { background: #facc15; }
+    </style>
+</head>
+<body>
+    <main>
+        <img src="/favicon.svg" alt="" />
+        <h1>You're offline</h1>
+        <p>Raya needs a connection to open and edit documents.</p>
+        <button onclick="location.reload()">Try again</button>
+    </main>
+    <script>
+        // come back by itself once the connection returns
+        addEventListener('online', () => location.reload());
+    </script>
+</body>
+</html>
