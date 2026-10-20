@@ -4,8 +4,9 @@
 // Mapping: the Title line becomes Word's Title, Heading and Subtitle lines Heading 1 and Heading 2 (so Word's
 // navigation pane shows the same sections as the editor's outline), Tiny text a smaller size, and the
 // toolbar formats their Word equivalents: bold, italic, underline, strikethrough, superscript/subscript, links, alignment,
-// numbered and bulleted lists. Manual page breaks become Word page breaks.
-import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, TextRun } from 'docx';
+// numbered and bulleted lists. Manual page breaks become Word page breaks, and tables Word tables.
+import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, Table, TableCell,
+    TableRow, TextRun, WidthType } from 'docx';
 import { styleOfFormat } from './text_styles.js';
 
 /**
@@ -110,7 +111,8 @@ export function buildDocx(ops, title)
     let listInstance = 0;
     let inNumberedList = false;
 
-    const paragraphs = lines.map((line) => {
+    /** @param {Line} line */
+    const paragraphOf = (line) => {
         if(line.pageBreak)
         {
             inNumberedList = false;
@@ -138,7 +140,47 @@ export function buildDocx(ops, title)
             numbering: numbered ? { reference: 'numbered', level, instance: listInstance } : undefined,
             bullet: a.list === 'bullet' ? { level } : undefined,
         });
-    });
+    };
+
+    /**
+     * A Word table from rows of cell lines (table.js: each cell is a line, a row is the run of cells that
+     * share a row id). Rows with fewer cells are padded, and the columns share the page width equally.
+     * @param {Line[][]} rows
+     */
+    const tableOf = (rows) => {
+        const columns = Math.max(...rows.map((row) => row.length));
+        return new Table({
+            width: { size: 100, type: WidthType.PERCENTAGE },
+            columnWidths: Array(columns).fill(Math.floor(9000 / columns)),
+            rows: rows.map((row) => new TableRow({
+                children: Array.from({ length: columns }, (_, c) => new TableCell({
+                    children: [row[c] ? paragraphOf(row[c]) : new Paragraph('')],
+                })),
+            })),
+        });
+    };
+
+    /** @type {(Paragraph | Table)[]} */
+    const blocks = [];
+    for(let i = 0; i < lines.length;)
+    {
+        if(!lines[i].attributes.table)
+        {
+            blocks.push(paragraphOf(lines[i++]));
+            continue;
+        }
+        /** @type {Line[][]} */
+        const rows = [];
+        while(i < lines.length && lines[i].attributes.table)
+        {
+            const id = lines[i].attributes.table;
+            const row = [];
+            while(i < lines.length && lines[i].attributes.table === id) row.push(lines[i++]);
+            rows.push(row);
+        }
+        inNumberedList = false;
+        blocks.push(tableOf(rows));
+    }
 
     return new Document({
         title: title || 'Untitled',
@@ -175,7 +217,7 @@ export function buildDocx(ops, title)
                 })),
             }],
         },
-        sections: [{ children: paragraphs }],
+        sections: [{ children: blocks }],
     });
 }
 

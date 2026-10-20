@@ -132,6 +132,44 @@ test('a numbered list restarts after a page break', async () => {
     assert.notEqual(numIds[0], numIds[1]);
 });
 
+/** A table as Quill stores it: each cell a line whose newline carries its row id */
+function tableOps(rows)
+{
+    return rows.flatMap((cells, r) => cells.flatMap((text) => [
+        ...(text ? [{ insert: text }] : []),
+        { insert: '\n', attributes: { table: `row-${r}` } },
+    ]));
+}
+
+test('a table becomes a Word table, with rows and cells in order', async () => {
+    const xml = await documentXml([
+        { insert: 'Before\n' },
+        ...tableOps([['Name', 'Role'], ['Ann', 'Editor'], ['Bob', '']]),
+        { insert: 'After\n' },
+    ]);
+    assert.equal((xml.match(/<w:tbl>/g) ?? []).length, 1);
+    assert.equal((xml.match(/<w:tr>/g) ?? []).length, 3);
+    assert.equal((xml.match(/<w:tc>/g) ?? []).length, 6);
+    const order = ['Before', 'Name', 'Role', 'Ann', 'Editor', 'Bob', 'After'].map((w) => xml.indexOf(`>${w}<`));
+    assert.deepEqual([...order].sort((a, b) => a - b), order, 'text stays in document order');
+    assert.ok(order.every((i) => i > 0));
+});
+
+test('cells keep their formatting, and a short row is padded to the full width', async () => {
+    const xml = await documentXml([
+        { insert: 'Bold', attributes: { bold: true } }, { insert: '\n', attributes: { table: 'row-a' } },
+        { insert: 'x' }, { insert: '\n', attributes: { table: 'row-a' } },
+        { insert: 'only' }, { insert: '\n', attributes: { table: 'row-b' } },
+    ]);
+    assert.match(xml, /<w:b\/>/);
+    assert.equal((xml.match(/<w:tc>/g) ?? []).length, 4, 'the second row gets an empty second cell');
+});
+
+test('two tables separated by text stay two tables', async () => {
+    const xml = await documentXml([...tableOps([['a', 'b']]), { insert: 'between\n' }, ...tableOps([['c', 'd']])]);
+    assert.equal((xml.match(/<w:tbl>/g) ?? []).length, 2);
+});
+
 test('file names drop characters file systems reject', () => {
     assert.equal(docxFileName('Trip: Goa / Day 1?'), 'Trip Goa Day 1.docx');
     assert.equal(docxFileName('   '), 'Untitled.docx');

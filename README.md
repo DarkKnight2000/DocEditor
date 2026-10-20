@@ -47,6 +47,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - One-click text styles: *Title* (largest, bold, centred, one per document), *Heading* (bold, centred, for sections), *Subtitle* (bold italic), *Text* and *Tiny*. Pressing Enter after a heading switches back to Text.
 - An **outline pane** lists every Title, Heading and Subtitle as three levels, jumps to a section on click and highlights the section the cursor is in.
 - **Page breaks:** a toolbar button (or Ctrl+Enter) starts a new page, shown as a gap between pages. Downloads to Word keep them as real page breaks.
+- **Tables:** insert a table from the toolbar, move between cells with Tab, and add or delete rows and columns from the Table menu. Tables sync like any other text, and download to Word as real tables.
 - **Download as Word (.docx)**, built in the browser. Title becomes Word's Title, and Headings and Subtitles become Word headings, so Word's navigation pane shows the same sections, and lists, links and formatting carry over. The converter only loads when it's first used.
 
 **Sharing and accounts**

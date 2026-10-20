@@ -104,6 +104,44 @@ def test_page_break_is_one_character_for_concurrent_edits(db):
     run(scenario())
 
 
+def test_typing_in_a_table_while_someone_adds_a_row(db):
+    # a table is lines whose newline carries {'table': row id}; a 2x2 table: cells a, b / c, d
+    def cell(text, row):
+        return [{'insert': text}, {'insert': '\n', 'attributes': {'table': row}}]
+    db.add_doc(rev=0)
+    db.docs['doc']['head']['delta'] = cell('a', 'r1') + cell('b', 'r1') + cell('c', 'r2') + cell('d', 'r2') + [{'insert': '\n'}]
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        await join(syncer, 'a')
+        await join(syncer, 'b')
+        # a adds an empty row between the two rows; b types into cell "c" without having seen it
+        await syncer.add_revision(None, 'a', [{'retain': 4}, {'insert': '\n\n', 'attributes': {'table': 'r3'}}], 0)
+        await syncer.add_revision(None, 'b', [{'retain': 5}, {'insert': 'X'}], 0)
+        assert normalize(db.docs['doc']['head']['delta']) == normalize(
+            cell('a', 'r1') + cell('b', 'r1') + [{'insert': '\n\n', 'attributes': {'table': 'r3'}}]
+            + cell('cX', 'r2') + cell('d', 'r2') + [{'insert': '\n'}])
+    run(scenario())
+
+
+def test_change_reaching_past_the_document_end_is_refused(db):
+    # a client whose copy drifted sends a change that keeps more characters than the document has:
+    # saving it would leave a retain inside the stored document, so it's refused and the client resyncs
+    db.add_doc(text='abc\n', rev=0)
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a, b = await join(syncer, 'a'), await join(syncer, 'b')
+        await syncer.add_revision(None, 'a', [{'retain': 5}, {'retain': 1, 'attributes': {'bold': True}}], 0)
+        assert a.of_type(MessageType.SERVER_RESYNC.value) == [{'type': MessageType.SERVER_RESYNC.value}]
+        assert a.of_type(ACK) == [] and b.of_type(REV) == []
+        assert db.docs['doc']['head'] == {'rev_id': 0, 'delta': [{'insert': 'abc\n'}]}
+        # a change up to the very end is fine
+        await syncer.add_revision(None, 'a', [{'retain': 4, 'attributes': {'bold': True}}], 0)
+        assert a.of_type(ACK) == [{'type': ACK, 'rev': 1}]
+    run(scenario())
+
+
 def test_edit_based_on_unknown_revision_is_rejected(db):
     db.add_doc(text='xy', rev=3)
 

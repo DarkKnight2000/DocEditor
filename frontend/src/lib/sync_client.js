@@ -176,3 +176,13 @@ export function cursorFromServer(state, cursor)
     end = pending.transformPosition(end);
     return { index: start, length: Math.max(0, end - start) };
 }
+
+/**
+ * Length of the document this client should be showing (A with its unsent edits), to check the
+ * editor against: the two must always match, or changes from here won't fit the server's copy.
+ * @param {ReturnType<typeof createClientState>} state
+ */
+export function screenLength(state)
+{
+    return state.A.compose(state.X).compose(state.Y).length();
+}

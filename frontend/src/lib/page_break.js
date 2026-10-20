@@ -37,6 +37,8 @@ Quill.register(PageBreak);
 export function insertPageBreak(quill)
 {
     const range = quill.getSelection(true);
+    // a page break can't go inside a table cell: it would split the table
+    if(quill.getFormat(range).table) return;
     quill.updateContents(new Delta().retain(range.index).delete(range.length).insert({ pagebreak: true }), 'user');
     quill.setSelection(range.index + 1, 0, 'silent');
 }

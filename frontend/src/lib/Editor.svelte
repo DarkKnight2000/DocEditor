@@ -12,10 +12,12 @@
     import "$lib/styles/quill-editor.css";
     import { page } from "$app/state";
     import { dev } from "$app/environment";
-    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer } from "$lib/sync_client.js";
+    import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer, screenLength } from "$lib/sync_client.js";
     import RemoteCursors from "$lib/RemoteCursors.svelte";
     import { insertPageBreak, removePageBreakAt } from "$lib/page_break.js";
     import PageBreakIcon from "@iconify-svelte/material-symbols/insert-page-break-outline-rounded";
+    import { insertTable, inTable, TABLE_ACTIONS, runTableAction } from "$lib/table.js";
+    import TableIcon from "@iconify-svelte/material-symbols/table-outline-rounded";
     import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
     import { buildOutline, activeOutlineItem } from "$lib/outline.js";
     import OutlineIcon from "@iconify-svelte/material-symbols/toc-rounded";
@@ -36,7 +38,8 @@
         SERVER_DOC_LIMIT: 7,
         SERVER_PRESENCE: 8,
         CLIENT_CURSOR: 9,
-        SERVER_CURSOR: 10
+        SERVER_CURSOR: 10,
+        SERVER_RESYNC: 11
     };
 
     const ClientState = createClientState();
@@ -71,6 +74,11 @@
     }
     // style of the line(s) at the cursor, shown in the style dropdown ('' when mixed)
     let current_style = $state('text');
+    // whether the cursor is in a table (shows the Table menu), and where the cursor last was: the menu
+    // takes the focus from the editor, and the table actions need the cursor's cell
+    let in_table = $state(false);
+    /** @type {{ index: number, length: number } | null} */
+    let last_range = null;
     // Outline pane: the document's Titles and Subtitles
     /** @type {import('$lib/outline.js').OutlineItem[]} */
     let outline = $state([]);
@@ -194,8 +202,34 @@
                     handlers: {
                         /** @this {any} */
                         pagebreak() { insertPageBreak(this.quill); },
+                        // a list or a cleared line inside a table would turn its cell into a plain line and break
+                        // the table, so inside tables these only touch the text, not the line
+                        /** @this {any} */
+                        list(/** @type {any} */ value) {
+                            if(!inTable(this.quill)) this.quill.format("list", value, "user");
+                        },
+                        /** @this {any} */
+                        clean() {
+                            const range = this.quill.getSelection();
+                            if(!range) return;
+                            const inline = ["bold", "italic", "underline", "strike", "script", "link", "size", "color", "background"];
+                            if(!range.length)
+                            {
+                                // like Quill's own: with no selection, only the formats for what's typed next
+                                for(const name of inline) this.quill.format(name, false, "user");
+                            }
+                            else if(inTable(this.quill, range))
+                            {
+                                this.quill.formatText(range.index, range.length, Object.fromEntries(inline.map((n) => [n, false])), "user");
+                            }
+                            else
+                            {
+                                this.quill.removeFormat(range.index, range.length, "user");
+                            }
+                        },
                     },
                 },
+                table: true,
                 keyboard: {
                     bindings: {
                         // Ctrl+Enter (Cmd+Enter on a Mac) inserts a page break, as in Word and Google Docs
@@ -321,7 +355,12 @@
         // keep the style dropdown in step with the line at the cursor
         quill.on("editor-change", (/** @type {string} */ event_name) => {
             const range = quill.getSelection();
-            if(range) current_style = styleOfFormat(quill.getFormat(range));
+            if(range)
+            {
+                current_style = styleOfFormat(quill.getFormat(range));
+                in_table = inTable(quill, range);
+                last_range = range;
+            }
             if(event_name === "text-change") schedule_outline();
             else update_active_heading();
             if(cursor_timer === null) cursor_timer = setTimeout(send_cursor, 150);
@@ -347,6 +386,25 @@
         // characters typed, not counting the newline Quill always keeps at the end
         const text_length = () => quill.getLength() - 1;
 
+        // The editor and the sync state (A, X, Y in sync_client.js) must always describe the same document.
+        // If they ever drift apart, changes sent from here wouldn't fit the server's copy, so stop and
+        // reload from the saved document instead of sending them.
+        let resyncing = false;
+        function check_in_step(/** @type {string} */ after)
+        {
+            if(resyncing || screenLength(ClientState) === quill.getLength()) return;
+            console.error(`Raya: the editor no longer matches the sync state (after ${after}); reloading`);
+            resync();
+        }
+        function resync()
+        {
+            if(resyncing) return;
+            resyncing = true;
+            sync_status = 'Out of sync, reloading…';
+            quill.disable();
+            setTimeout(() => location.reload(), 1500);
+        }
+
         quill.on("text-change", (delta, oldContents, source) => {
             if (source == "api") {
                 char_count = text_length();
@@ -365,6 +423,7 @@
             }
             char_count = text_length();
             applyLocalChange(ClientState, delta);
+            check_in_step("a local change");
         });
 
         // event loop
@@ -391,6 +450,7 @@
                     const B = new Delta(JSON.parse(recv_data.content));
                     const D = applyServerRev(ClientState, B, recv_data.rev);
                     quill.updateContents(D, "api");
+                    check_in_step("someone else's change");
                 } else if (recv_data.type == MessageTypes.SERVER_INIT) {
                     applyInit(ClientState, recv_data.content, recv_data.rev);
                     max_chars = recv_data.max_chars ?? Infinity;
@@ -413,6 +473,9 @@
                     sync_status = 'Document is full, reloading…';
                     quill.disable();
                     setTimeout(() => location.reload(), 2000);
+                } else if (recv_data.type == MessageTypes.SERVER_RESYNC) {
+                    // the server refused a change from here that didn't fit its copy of the document
+                    resync();
                 } else if (recv_data.type == MessageTypes.SERVER_PRESENCE) {
                     others = recv_data.users;
                 } else if (recv_data.type == MessageTypes.SERVER_CURSOR) {
@@ -499,6 +562,25 @@
             <!-- <button class="ql-code-block" title="Clean button" value="super"></button> -->
             <!-- <button class="ql-color" title="Clean button" value="super"></button>
             <button class="ql-background" title="Clean button" value="super"></button> -->
+            <!-- the table controls aren't Quill toolbar formats: mousedown is cancelled so the editor keeps focus -->
+            <button type="button" class="table-insert" title={in_table ? "Tables can't be put inside tables" : 'Insert table'}
+                aria-label="Insert table" disabled={in_table}
+                onmousedown={(e) => e.preventDefault()} onclick={() => quill_instance && insertTable(quill_instance)}>
+                <TableIcon aria-hidden="true" />
+            </button>
+            {#if in_table}
+                <select class="text-style-picker table-actions" aria-label="Table" title="Change the table" value=""
+                    onchange={(e) => {
+                        const action = e.currentTarget.value;
+                        e.currentTarget.value = '';
+                        if(quill_instance && last_range) runTableAction(quill_instance, action, last_range);
+                    }}>
+                    <option value="" disabled>Table</option>
+                    {#each TABLE_ACTIONS as action}
+                        <option value={action.id}>{action.label}</option>
+                    {/each}
+                </select>
+            {/if}
             <button type="button" class="ql-pagebreak" title="Page break (Ctrl+Enter)" aria-label="Insert page break">
                 <PageBreakIcon aria-hidden="true" />
             </button>

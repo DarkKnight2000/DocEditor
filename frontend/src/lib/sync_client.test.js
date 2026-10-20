@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Delta from 'quill-delta';
-import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer } from './sync_client.js';
+import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer, screenLength } from './sync_client.js';
 
 /** Document the client should be showing */
 const docOf = (/** @type {any} */ s) => s.A.compose(s.X).compose(s.Y);
@@ -253,4 +253,15 @@ test('a cursor sent with unsent text lands after that text once it arrives', () 
     const shown = applyServerRev(receiver, new Delta().retain(4).insert('big '), 1);
     index = shown.transformPosition(index);
     assert.equal(index, 8, "after 'big ', like on the sender's screen");
+});
+
+test('screenLength follows saved, in-flight and unsent edits', () => {
+    const s = clientAt('hello', 0);                                   // 'hello' + final newline
+    assert.equal(screenLength(s), 6);
+    applyLocalChange(s, new Delta().retain(5).insert(' world'));
+    takeOutgoing(s);                                                  // in flight
+    applyLocalChange(s, new Delta().insert('> '));                    // typed since
+    assert.equal(screenLength(s), 14);
+    applyServerRev(s, new Delta().delete(1), 1);                      // someone deleted the h
+    assert.equal(screenLength(s), 13);
 });

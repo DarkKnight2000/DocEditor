@@ -80,6 +80,16 @@
     }
 }
 
+/* Tables (table.js): light grid lines, room around the text, and space before and after the table.
+   Quill's own table styles keep the columns of equal width (table-layout: fixed). */
+.ql-editor table {
+    @apply my-4;
+}
+
+.ql-editor table td {
+    @apply border border-gray-300 px-3 py-1.5 align-top;
+}
+
 /* --- the toolbar ------------------------------------------------------------ */
 
 .text-style-picker {
@@ -89,6 +99,16 @@
 /* outline toggle: in the toolbar below laptop width (wider screens have a button beside the page) */
 .ql-snow.ql-toolbar button.outline-toggle {
     @apply flex items-center justify-center text-gray-500;
+}
+
+/* the insert-table button isn't one of Quill's formats; match its buttons (dark icon, faded when unavailable) */
+.ql-snow.ql-toolbar button.table-insert {
+    @apply text-[#444] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent;
+}
+
+/* the Table menu is narrower than the style menu */
+.ql-snow.ql-toolbar .table-actions {
+    @apply w-20;
 }
 
 .ql-snow.ql-toolbar button.outline-toggle[aria-pressed="true"] {

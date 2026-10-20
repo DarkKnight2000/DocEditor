@@ -52,7 +52,7 @@
     }
     // how the status is shown: problems in red, saved with a cloud tick, everything else in progress
     let status_kind = $derived(
-        ['Offline', "Can't connect", 'Error saving', 'Document is full, reloading…'].includes(sync_status) ? 'problem'
+        ['Offline', "Can't connect", 'Error saving', 'Document is full, reloading…', 'Out of sync, reloading…'].includes(sync_status) ? 'problem'
         : sync_status === 'Saved' ? 'saved' : 'busy');
 
     // profile picture link can be missing or broken; fall back to the first letter of the name

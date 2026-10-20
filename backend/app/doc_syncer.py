@@ -21,6 +21,7 @@ class MessageType(Enum):
     SERVER_PRESENCE = 8    # The other people who have the document open
     CLIENT_CURSOR = 9      # Client's cursor/selection moved (index, length, at revision rev)
     SERVER_CURSOR = 10     # Another client's cursor, relayed as is; index None when it left
+    SERVER_RESYNC = 11     # Client's change didn't fit the document, so it was refused: reload to resync
 
 # Maximum length in characters of documents owned by guest users ('known' owners have no limit);
 # self-hosted copies can raise it through the environment
@@ -37,6 +38,15 @@ def text_length(doc) -> int:
 
 class DocTooLong(Exception):
     pass
+
+
+class DocMismatch(Exception):
+    """A client's change doesn't fit the document: its copy has drifted from the server's"""
+
+
+def change_base_length(change) -> int:
+    """Length of the document a change applies to, at least: the characters it keeps or deletes"""
+    return sum(delta.op_length(op) for op in change if delta.INSERT not in op)
 
 """
 Compose - Add one after another
@@ -208,6 +218,12 @@ class DocSyncer:
                     if record['rev_id'] > reference_id:
                         changes = delta.transform(record['delta'], changes, True)
 
+                # A change can't reach past the end of the document. If it does, the client's copy no
+                # longer matches the server's (it was made against a document we don't have), and
+                # composing it would leave a retain in the stored document. Refuse it instead.
+                if change_base_length(changes) > delta.length(content['head']['delta']):
+                    raise DocMismatch()
+
                 new_doc = delta.compose(content['head']['delta'], changes)
                 # Browsers stop edits past the limit, but concurrent edits can still add up past it.
                 # Only growth is refused, so a document that's already too long can be shortened.
@@ -233,6 +249,12 @@ class DocSyncer:
                         "type": MessageType.SERVER_DOC_LIMIT.value,
                         "max_chars": self.max_chars
                     })
+                return
+            except DocMismatch:
+                # Nothing was saved or broadcast; the sender reloads to start again from the saved document
+                print(f'Refused a change from client {client_id} on doc {self.doc_id}: it doesn\'t fit the document')
+                if client_id in self.clients:
+                    await self._send(self.clients[client_id], {"type": MessageType.SERVER_RESYNC.value})
                 return
             if not saved:
                 raise RuntimeError(f'Could not save revision for doc {self.doc_id}')
