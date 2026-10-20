@@ -67,16 +67,17 @@
    a line that starts with big text from a normal line with a big word in it */
 
 /* A manual page break (page_break.js): the grey desk showing between two pages, across the full width
-   of the sheet (past the page margins and over its border), with each page's margin above and below */
+   of the sheet (past the page margins, up to its border), with each page's margin above and below. It
+   stops at the border: going past would make the editor, which scrolls, scroll sideways. */
 .ql-editor hr.page-break {
     @apply bg-gray-50 border-y border-x-0 border-gray-200 cursor-default;
     height: 20px;
-    margin: 2rem calc(-1.5rem - 1px);
+    margin: 2rem -1.5rem;
 }
 
 @media (min-width: 640px) {
     .ql-editor hr.page-break {
-        margin: 4rem calc(-4.5rem - 1px);
+        margin: 4rem -4.5rem;
     }
 }
 
