@@ -30,6 +30,11 @@ Unicode true
 ####
 ## !define REQUEST_EXECUTION_LEVEL "admin"            # Default "admin"  see also https://nsis.sourceforge.io/Docs/Chapter4.html
 ####
+## Raya installs for the current user only (in %LocalAppData%\Programs\Raya), so installing it, and
+## opening .raya files with it, needs no administrator rights
+!define REQUEST_EXECUTION_LEVEL "user"
+!define WAILS_INSTALL_SCOPE "user"
+####
 ## Include the wails tools
 ####
 !include "wails_tools.nsh"
@@ -55,6 +60,7 @@ ManifestDPIAware true
 # !define MUI_WELCOMEFINISHPAGE_BITMAP "resources\leftimage.bmp" #Include this to add a bitmap on the left side of the Welcome Page. Must be a size of 164x314
 !define MUI_FINISHPAGE_NOAUTOCLOSE # Wait on the INSTFILES page so the user can take a look into the details of the installation steps
 !define MUI_ABORTWARNING # This will warn the user if they exit from the installer.
+!define MUI_FINISHPAGE_RUN "$INSTDIR\${PRODUCT_EXECUTABLE}" # "Run Raya" checkbox on the last page
 
 !insertmacro MUI_PAGE_WELCOME # Welcome to the installer page.
 # !insertmacro MUI_PAGE_LICENSE "resources\eula.txt" # Adds a EULA page to the installer
@@ -87,6 +93,45 @@ Function .onInit
    !insertmacro wails.checkArchitecture
 FunctionEnd
 
+# .raya files open in Raya. These replace wails.associateFiles and wails.unassociateFiles (wails_tools.nsh,
+# which wails build regenerates), which:
+# - leave the program's path unquoted in the open command, so opening a file fails when the install
+#   folder has a space in it (a user name with a space)
+# - back up whatever .raya pointed to on every install, so after reinstalling, the "previous" program
+#   is Raya itself and uninstalling points .raya back at Raya
+!define RAYA_EXT "Software\Classes\.raya"
+!define RAYA_CLASS "Raya.Document"
+
+!macro raya.associateFiles
+    ReadRegStr $R0 SHELL_CONTEXT "${RAYA_EXT}" ""
+    ${If} $R0 != "${RAYA_CLASS}"
+        WriteRegStr SHELL_CONTEXT "${RAYA_EXT}" "${RAYA_CLASS}_backup" "$R0"
+    ${EndIf}
+    WriteRegStr SHELL_CONTEXT "${RAYA_EXT}" "" "${RAYA_CLASS}"
+
+    WriteRegStr SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}" "" "Raya document"
+    WriteRegStr SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}\DefaultIcon" "" "$INSTDIR\rayaFile.ico"
+    WriteRegStr SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}\shell" "" "open"
+    WriteRegStr SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}\shell\open" "" "Open with ${INFO_PRODUCTNAME}"
+    WriteRegStr SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"'
+    File "..\rayaFile.ico"
+!macroend
+
+!macro raya.unassociateFiles
+    # give .raya back to the program it had before Raya, or remove it if it had none (a backup naming
+    # Raya itself, left by an installer from before this fix, counts as none)
+    ReadRegStr $R0 SHELL_CONTEXT "${RAYA_EXT}" "${RAYA_CLASS}_backup"
+    ${If} $R0 == ""
+    ${OrIf} $R0 == "${RAYA_CLASS}"
+        DeleteRegKey SHELL_CONTEXT "${RAYA_EXT}"
+    ${Else}
+        WriteRegStr SHELL_CONTEXT "${RAYA_EXT}" "" "$R0"
+        DeleteRegValue SHELL_CONTEXT "${RAYA_EXT}" "${RAYA_CLASS}_backup"
+    ${EndIf}
+    DeleteRegKey SHELL_CONTEXT "Software\Classes\${RAYA_CLASS}"
+    Delete "$INSTDIR\rayaFile.ico"
+!macroend
+
 Section
     !insertmacro wails.setShellContext
 
@@ -99,8 +144,10 @@ Section
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
 
-    !insertmacro wails.associateFiles
+    !insertmacro raya.associateFiles
     !insertmacro wails.associateCustomProtocols
+    # tell Explorer the file types changed, so .raya files show their icon straight away
+    System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 
     !insertmacro wails.writeUninstaller
 SectionEnd
@@ -115,8 +162,9 @@ Section "uninstall"
     Delete "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk"
     Delete "$DESKTOP\${INFO_PRODUCTNAME}.lnk"
 
-    !insertmacro wails.unassociateFiles
+    !insertmacro raya.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
+    System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 
     !insertmacro wails.deleteUninstaller
 SectionEnd

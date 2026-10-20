@@ -57,8 +57,25 @@ go test ./...    # file format, saving and recent-files tests
 cd frontend && npm run check
 ```
 
-`wails build -nsis` also builds a Windows installer, if [NSIS](https://wails.io/docs/guides/windows-installer/)
-is installed. The app icon is generated from `build/appicon.png`.
+The app icon is generated from `build/appicon.png`, and the `.raya` file icon from `build/rayaFile.png`.
+
+## Installer
+
+`wails build -nsis` also builds `build/bin/Raya-amd64-installer.exe`. This needs
+[NSIS](https://nsis.sourceforge.io) (`winget install NSIS.NSIS`) on the `PATH`, usually
+`C:\Program Files (x86)\NSIS`. The installer:
+
+- installs for the current user only, in `%LocalAppData%\Programs\Raya`, so it needs no administrator rights
+- adds Start menu and desktop shortcuts, and an entry in Settings > Apps for uninstalling
+- makes `.raya` files open in Raya, with their own icon
+- installs the WebView2 runtime if the computer doesn't have it (this needs internet)
+
+Uninstalling removes all of that and gives `.raya` files back to whatever opened them before. It keeps
+the recent-files list, and of course the documents themselves. The installer script is
+`build/windows/installer/project.nsi`. Wails regenerates `wails_tools.nsh` on every build, so changes go
+in `project.nsi`.
+
+The installer isn't code-signed, so Windows SmartScreen warns about it ("More info", then "Run anyway").
 
 ## Keyboard shortcuts
 

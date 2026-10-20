@@ -14,6 +14,16 @@
     "productName": "Raya",
     "productVersion": "0.1.0",
     "copyright": "Copyright © 2026 Rishi Kaley",
-    "comments": "A minimal document editor for files on your computer"
+    "comments": "A minimal document editor for files on your computer",
+    "companyName": "Rishi Kaley",
+    "fileAssociations": [
+      {
+        "ext": "raya",
+        "name": "Raya.Document",
+        "description": "Raya document",
+        "iconName": "rayaFile",
+        "role": "Editor"
+      }
+    ]
   }
 }

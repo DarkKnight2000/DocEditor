@@ -5,3 +5,6 @@ frontend/node_modules
 # made from build/appicon.png by wails build
 build/windows/icon.ico
 frontend/package.json.md5
+build/windows/rayaFile.ico
+# WebView2 bootstrapper that wails build -nsis downloads into the installer
+build/windows/installer/tmp
