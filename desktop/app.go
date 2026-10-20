@@ -111,9 +111,9 @@ func (a *App) Open(path string) (*Document, error) {
 	return doc, nil
 }
 
-// Save writes the contents to an existing document
-func (a *App) Save(path string, ops json.RawMessage) error {
-	if err := writeDocument(path, ops); err != nil {
+// Save writes the contents and the document's autosave setting to an existing document
+func (a *App) Save(path string, ops json.RawMessage, autosave bool) error {
+	if err := writeDocument(path, ops, autosave); err != nil {
 		return err
 	}
 	a.recent.add(path)
@@ -122,7 +122,7 @@ func (a *App) Save(path string, ops json.RawMessage) error {
 
 // SaveAs asks where to save and writes the document there. It returns the saved document without its
 // contents (the frontend already has them), or nil when the person cancels.
-func (a *App) SaveAs(name string, ops json.RawMessage) (*Document, error) {
+func (a *App) SaveAs(name string, ops json.RawMessage, autosave bool) (*Document, error) {
 	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
 		Title:           "Save document",
 		DefaultFilename: safeFileName(name, "Untitled") + fileExt,
@@ -132,10 +132,10 @@ func (a *App) SaveAs(name string, ops json.RawMessage) (*Document, error) {
 		return nil, err
 	}
 	path = withExt(path, fileExt)
-	if err := a.Save(path, ops); err != nil {
+	if err := a.Save(path, ops, autosave); err != nil {
 		return nil, err
 	}
-	return &Document{Path: path, Name: docName(path)}, nil
+	return &Document{Path: path, Name: docName(path), Autosave: autosave}, nil
 }
 
 // ExportDocx asks where to save a Word file made by the frontend (export_docx.js), sent as base64.

@@ -12,7 +12,7 @@ func TestSaveAndOpenKeepsTheContents(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "Notes.raya")
 	ops := json.RawMessage(`[{"insert":"Hello"},{"insert":"\n","attributes":{"align":"center"}}]`)
 
-	if err := writeDocument(path, ops); err != nil {
+	if err := writeDocument(path, ops, false); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := readDocument(path)
@@ -31,7 +31,7 @@ func TestSavingReplacesTheFileAndLeavesNoTemporaryFiles(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a.raya")
 	for _, text := range []string{"first", "second"} {
-		if err := writeDocument(path, json.RawMessage(`[{"insert":"`+text+`\n"}]`)); err != nil {
+		if err := writeDocument(path, json.RawMessage(`[{"insert":"`+text+`\n"}]`), false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -50,7 +50,7 @@ func TestSavingReplacesTheFileAndLeavesNoTemporaryFiles(t *testing.T) {
 
 func TestContentsThatAreNotAListAreNotSaved(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "a.raya")
-	if err := writeDocument(path, json.RawMessage(`{"insert":"x"}`)); err == nil {
+	if err := writeDocument(path, json.RawMessage(`{"insert":"x"}`), false); err == nil {
 		t.Error("saved contents that aren't a list")
 	}
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
@@ -141,7 +141,7 @@ func TestOpeningADocumentAddsItToTheRecentList(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", config) // Linux
 	t.Setenv("HOME", config)            // macOS
 	path := filepath.Join(t.TempDir(), "Notes.raya")
-	if err := writeDocument(path, json.RawMessage(`[{"insert":"\n"}]`)); err != nil {
+	if err := writeDocument(path, json.RawMessage(`[{"insert":"\n"}]`), false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -151,5 +151,36 @@ func TestOpeningADocumentAddsItToTheRecentList(t *testing.T) {
 	}
 	if list := app.RecentFiles(); len(list) != 1 || list[0].Path != path {
 		t.Errorf("got %+v", list)
+	}
+}
+
+func TestAutosaveIsKeptInTheFileOnlyWhenOn(t *testing.T) {
+	dir := t.TempDir()
+	ops := json.RawMessage(`[{"insert":"\n"}]`)
+	for _, on := range []bool{true, false} {
+		path := filepath.Join(dir, "doc.raya")
+		if err := writeDocument(path, ops, on); err != nil {
+			t.Fatal(err)
+		}
+		doc, err := readDocument(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if doc.Autosave != on {
+			t.Errorf("saved autosave %v, read back %v", on, doc.Autosave)
+		}
+		data, _ := os.ReadFile(path)
+		if strings.Contains(string(data), "autosave") != on {
+			t.Errorf("autosave %v: file is %s", on, data)
+		}
+	}
+}
+
+func TestFilesWithoutAnAutosaveSettingOpenWithItOff(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "old.raya")
+	os.WriteFile(path, []byte(`{"format":"raya","version":1,"ops":[{"insert":"\n"}]}`), 0o644)
+	doc, err := readDocument(path)
+	if err != nil || doc.Autosave {
+		t.Errorf("got %+v, %v", doc, err)
 	}
 }

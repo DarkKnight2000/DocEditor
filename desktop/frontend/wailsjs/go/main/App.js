@@ -26,12 +26,12 @@ export function RecentFiles() {
   return window['go']['main']['App']['RecentFiles']();
 }
 
-export function Save(arg1, arg2) {
-  return window['go']['main']['App']['Save'](arg1, arg2);
+export function Save(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Save'](arg1, arg2, arg3);
 }
 
-export function SaveAs(arg1, arg2) {
-  return window['go']['main']['App']['SaveAs'](arg1, arg2);
+export function SaveAs(arg1, arg2, arg3) {
+  return window['go']['main']['App']['SaveAs'](arg1, arg2, arg3);
 }
 
 export function SetDirty(arg1) {

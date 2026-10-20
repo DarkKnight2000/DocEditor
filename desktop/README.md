@@ -26,8 +26,14 @@ None of the web app's server, sync or sign-in code is used. The shared files get
 A `.raya` file is JSON holding the document as Quill ops:
 
 ```json
-{ "format": "raya", "version": 1, "ops": [{ "insert": "Hello\n" }] }
+{ "format": "raya", "version": 1, "autosave": true, "ops": [{ "insert": "Hello\n" }] }
 ```
+
+`autosave` is the document's own setting, switched with the Autosave toggle in the header. It's kept
+in the file, so it moves and copies with the document, and it's left out when off. With autosave on,
+the document saves a second after you stop typing, and at least every 10 seconds while you keep
+typing. Leaving the document or closing the window saves the last changes without asking. If an
+autosave fails, the header says so and the next edit tries again.
 
 Saving writes a temporary file next to the document and then renames it over the old one, so a crash
 doesn't leave a half-written file. In folders that can't rename files into place (some redirected or

@@ -13,15 +13,27 @@
     import SavedIcon from '@iconify-svelte/material-symbols/check-circle-outline-rounded';
     import EditedIcon from '@iconify-svelte/material-symbols/edit-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
+    import SavingIcon from '@iconify-svelte/material-symbols/sync-rounded';
+    import ErrorIcon from '@iconify-svelte/material-symbols/error-outline-rounded';
 
     /**
      * The open document, or null on the start screen. path is '' until a new document is first saved.
-     * @type {{ path: string, name: string, ops: any[] } | null}
+     * autosave is the document's own setting, kept in its file.
+     * @type {{ path: string, name: string, autosave: boolean, ops: any[] } | null}
      */
     let doc = $state(null);
+    // Edits made since the document opened, and how many of them are in the file. Counting rather than
+    // a flag means a save only covers the edits that were on screen when it started.
+    let edits = $state(0);
+    let saved_edits = $state(0);
     // changes on screen that aren't in the file yet
-    let dirty = $state(false);
+    let dirty = $derived(doc !== null && edits !== saved_edits);
+    // a dialog (save as, export) is open
     let busy = $state(false);
+    // a save is being written
+    let writing = $state(false);
+    // the last autosave failed: shown until a save works again
+    let autosave_failed = $state(false);
     // a new editor for every document opened, so nothing (e.g. undo history) carries over
     let doc_key = $state(0);
     /** @type {any} the editor component, for its contents */
@@ -42,8 +54,10 @@
     }
 
     // the window title, as other editors show it: the name, with a dot while there are unsaved changes
+    // (not for the moment before an autosave, which would make it flicker while typing)
     $effect(() => {
-        WindowSetTitle(doc ? `${dirty ? '• ' : ''}${doc.name} — Raya` : 'Raya');
+        const unsaved = dirty && (!doc?.autosave || !doc.path || autosave_failed);
+        WindowSetTitle(doc ? `${unsaved ? '• ' : ''}${doc.name} — Raya` : 'Raya');
     });
     // the app asks before closing the window while this is set
     $effect(() => {
@@ -56,12 +70,123 @@
         catch(ex) { recent = []; }
     }
 
-    /** @param {{ path: string, name: string, ops: any }} opened */
+    /** @param {{ path: string, name: string, autosave?: boolean, ops: any }} opened */
     function show(opened)
     {
-        doc = { path: opened.path, name: opened.name, ops: Array.isArray(opened.ops) ? opened.ops : [] };
-        dirty = false;
+        cancel_autosave();
+        doc = { path: opened.path, name: opened.name, autosave: !!opened.autosave, ops: Array.isArray(opened.ops) ? opened.ops : [] };
+        edits = saved_edits = 0;
+        autosave_failed = false;
         doc_key++;
+    }
+
+    function on_edit()
+    {
+        edits++;
+        schedule_autosave();
+    }
+
+    // ---- writing the file ----
+
+    /** @type {Promise<unknown> | null} the save being written, which the next one waits for */
+    let current_write = null;
+
+    async function writes_done()
+    {
+        while(current_write) await current_write.catch(() => {});
+    }
+
+    /**
+     * Writes what's on screen to the document's file, after any save already being written, so saves
+     * never overlap and the file always ends up with the latest contents. Errors are thrown.
+     */
+    async function write_file()
+    {
+        await writes_done();
+        if(!doc?.path || !editor) return;
+        const key = doc_key, at = edits;
+        writing = true;
+        current_write = Save(doc.path, editor.get_contents(), doc.autosave);
+        try
+        {
+            await current_write;
+            // still the same document: everything up to `at` is in the file
+            if(key === doc_key) saved_edits = Math.max(saved_edits, at);
+        }
+        finally
+        {
+            current_write = null;
+            writing = false;
+        }
+    }
+
+    // ---- autosave: a second after typing stops, and at least every 10 seconds while typing ----
+
+    const AUTOSAVE_DELAY = 1000;
+    const AUTOSAVE_MAX_WAIT = 10000;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let autosave_timer;
+    /** @type {number | undefined} when the oldest edit not yet autosaved was made */
+    let unsaved_since;
+
+    function schedule_autosave()
+    {
+        if(!doc?.autosave || !doc.path) return;
+        clearTimeout(autosave_timer);
+        const now = Date.now();
+        unsaved_since ??= now;
+        autosave_timer = setTimeout(autosave, Math.max(0, Math.min(AUTOSAVE_DELAY, unsaved_since + AUTOSAVE_MAX_WAIT - now)));
+    }
+
+    function cancel_autosave()
+    {
+        clearTimeout(autosave_timer);
+        autosave_timer = unsaved_since = undefined;
+    }
+
+    async function autosave()
+    {
+        cancel_autosave();
+        if(!dirty || !doc?.autosave) return;
+        try
+        {
+            await write_file();
+            autosave_failed = false;
+        }
+        catch(ex)
+        {
+            // said once, not on every retry; the next edit tries again
+            if(!autosave_failed) show_error(`Autosave failed: ${ex}. Your changes are still here.`);
+            autosave_failed = true;
+        }
+    }
+
+    /**
+     * Turns the document's autosave on or off and saves the setting into the file (with the contents,
+     * so turning it on saves straight away). A new document is saved first, asking where.
+     */
+    async function toggle_autosave()
+    {
+        if(!doc || busy) return;
+        const on = !doc.autosave;
+        doc.autosave = on;
+        if(!doc.path)
+        {
+            if(!(await save_as()) && doc) doc.autosave = false;
+            return;
+        }
+        cancel_autosave();
+        try
+        {
+            await write_file();
+            autosave_failed = false;
+        }
+        catch(ex)
+        {
+            if(doc) doc.autosave = !on;
+            show_error(`Could not turn ${on ? 'on' : 'off'} autosave: ${ex}`);
+        }
+        editor?.focus();
     }
 
     // ---- leaving a document with unsaved changes ----
@@ -73,11 +198,20 @@
 
     /**
      * Whether the current document can be left: true straight away when everything is saved, otherwise
-     * once the person saves it or chooses not to
+     * once the person saves it or chooses not to. With autosave on, the last changes are saved without
+     * asking (and it only asks if that fails).
      */
     async function can_leave()
     {
-        if(!doc || !dirty) return true;
+        if(!doc) return true;
+        if(dirty && doc.autosave && doc.path)
+        {
+            cancel_autosave();
+            try { await write_file(); } catch {}
+        }
+        // a save still being written finishes first
+        await writes_done();
+        if(!dirty) return true;
         const choice = await new Promise((resolve) => {
             unsaved_answer = resolve;
             unsaved_dialog.showModal();
@@ -130,8 +264,8 @@
     async function go_home()
     {
         if(busy || !(await can_leave())) return;
+        cancel_autosave();
         doc = null;
-        dirty = false;
         load_recent();
     }
 
@@ -143,11 +277,11 @@
     {
         if(!doc || !editor) return false;
         if(!doc.path) return save_as();
-        busy = true;
+        cancel_autosave();
         try
         {
-            await Save(doc.path, editor.get_contents());
-            dirty = false;
+            await write_file();
+            autosave_failed = false;
             return true;
         }
         catch(ex)
@@ -155,20 +289,26 @@
             show_error(`Could not save: ${ex}`);
             return false;
         }
-        finally { busy = false; }
     }
 
     async function save_as()
     {
-        if(!doc || !editor) return false;
+        if(!doc || !editor || busy) return false;
         busy = true;
+        cancel_autosave();
         try
         {
-            const saved = await SaveAs(doc.name, editor.get_contents());
-            if(!saved) return false;
+            // after any save being written to the old file
+            await writes_done();
+            const key = doc_key, at = edits;
+            const saved = await SaveAs(doc.name, editor.get_contents(), doc.autosave);
+            if(!saved || key !== doc_key || !doc) return false;
             doc.path = saved.path;
             doc.name = saved.name;
-            dirty = false;
+            saved_edits = at;
+            autosave_failed = false;
+            // edits typed while the dialog was open
+            if(dirty) schedule_autosave();
             return true;
         }
         catch(ex)
@@ -292,8 +432,14 @@
 
             <div class="flex flex-col min-w-0 flex-1">
                 <span class="text-lg font-bold truncate" title={doc.path || 'Not saved yet'}>{doc.name}</span>
-                <span class="flex items-center gap-1 text-xs text-gray-400" role="status">
-                    {#if dirty || !doc.path}
+                <span class="flex items-center gap-1 text-xs {autosave_failed ? 'text-red-600 font-semibold' : 'text-gray-400'}" role="status">
+                    {#if autosave_failed}
+                        <ErrorIcon class="w-3.5 h-3.5" aria-hidden="true" />
+                        Autosave failed, changes not saved
+                    {:else if writing || (dirty && doc.autosave && doc.path)}
+                        <SavingIcon class="w-3.5 h-3.5 animate-spin [animation-duration:1.5s]" aria-hidden="true" />
+                        Saving…
+                    {:else if dirty || !doc.path}
                         <EditedIcon class="w-3.5 h-3.5" aria-hidden="true" />
                         {doc.path ? 'Unsaved changes' : 'Not saved yet'}
                     {:else}
@@ -303,6 +449,16 @@
                 </span>
             </div>
 
+            <!-- this document's autosave; kept in its file, so it's still on next time it's opened -->
+            <button type="button" role="switch" aria-checked={doc.autosave} aria-label="Autosave" onclick={toggle_autosave} disabled={busy}
+                title={doc.autosave ? 'Autosave is on for this document: changes are saved as you type'
+                    : doc.path ? 'Save this document automatically as you type' : 'Save this document, then save it automatically as you type'}
+                class="flex items-center gap-2 py-1.5 px-2 rounded-xl text-sm font-semibold text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50">
+                <span class="hidden md:inline" aria-hidden="true">Autosave</span>
+                <span class="relative inline-flex items-center w-8 h-[1.125rem] rounded-full transition-colors {doc.autosave ? 'bg-yellow-400' : 'bg-gray-300'}" aria-hidden="true">
+                    <span class="absolute left-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform {doc.autosave ? 'translate-x-3.5' : ''}"></span>
+                </span>
+            </button>
             <button onclick={open_doc} disabled={busy} aria-label="Open" title="Open (Ctrl+O)"
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50">
                 <FolderOpenIcon class="w-5 h-5" aria-hidden="true" />
@@ -320,7 +476,7 @@
 
         <div class="flex-1 min-h-0 flex flex-col select-text">
             {#key doc_key}
-                <DesktopEditor bind:this={editor} ops={doc.ops} onchange={() => dirty = true} />
+                <DesktopEditor bind:this={editor} ops={doc.ops} onchange={on_edit} />
             {/key}
         </div>
     {:else}

@@ -11,8 +11,10 @@ import (
 
 // A Raya document on disk is a small JSON file: the editor's contents as Quill ops, plus a format
 // name and version so a newer app can tell old files apart and an older one can refuse newer files.
+// Autosave is the document's own setting, kept in the file so it moves and copies with it (and left
+// out when off, which older versions of the app read the same way).
 //
-//	{"format": "raya", "version": 1, "ops": [{"insert": "Hello\n"}]}
+//	{"format": "raya", "version": 1, "autosave": true, "ops": [{"insert": "Hello\n"}]}
 const (
 	fileExt       = ".raya"
 	fileFormat    = "raya"
@@ -20,16 +22,18 @@ const (
 )
 
 type fileContents struct {
-	Format  string          `json:"format"`
-	Version int             `json:"version"`
-	Ops     json.RawMessage `json:"ops"`
+	Format   string          `json:"format"`
+	Version  int             `json:"version"`
+	Autosave bool            `json:"autosave,omitempty"`
+	Ops      json.RawMessage `json:"ops"`
 }
 
 // Document is an open file as the frontend sees it
 type Document struct {
-	Path string          `json:"path"`
-	Name string          `json:"name"`
-	Ops  json.RawMessage `json:"ops"`
+	Path     string          `json:"path"`
+	Name     string          `json:"name"`
+	Autosave bool            `json:"autosave"`
+	Ops      json.RawMessage `json:"ops"`
 }
 
 // docName is the name shown for a file: its base name without the extension
@@ -70,16 +74,16 @@ func readDocument(path string) (*Document, error) {
 	if err := checkOps(contents.Ops); err != nil {
 		return nil, fmt.Errorf("%s is damaged: %w", filepath.Base(path), err)
 	}
-	return &Document{Path: path, Name: docName(path), Ops: contents.Ops}, nil
+	return &Document{Path: path, Name: docName(path), Autosave: contents.Autosave, Ops: contents.Ops}, nil
 }
 
 // writeDocument saves through a temporary file in the same folder, renamed over the old file once it
 // is fully written, so a crash or a full disk never leaves half a document behind
-func writeDocument(path string, ops json.RawMessage) error {
+func writeDocument(path string, ops json.RawMessage, autosave bool) error {
 	if err := checkOps(ops); err != nil {
 		return err
 	}
-	data, err := json.Marshal(fileContents{Format: fileFormat, Version: formatVersion, Ops: ops})
+	data, err := json.Marshal(fileContents{Format: fileFormat, Version: formatVersion, Autosave: autosave, Ops: ops})
 	if err != nil {
 		return err
 	}

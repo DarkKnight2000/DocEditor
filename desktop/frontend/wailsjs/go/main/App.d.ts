@@ -15,9 +15,9 @@ export function Quit():Promise<void>;
 
 export function RecentFiles():Promise<Array<main.RecentFile>>;
 
-export function Save(arg1:string,arg2:jsontext.Value):Promise<void>;
+export function Save(arg1:string,arg2:jsontext.Value,arg3:boolean):Promise<void>;
 
-export function SaveAs(arg1:string,arg2:jsontext.Value):Promise<main.Document>;
+export function SaveAs(arg1:string,arg2:jsontext.Value,arg3:boolean):Promise<main.Document>;
 
 export function SetDirty(arg1:boolean):Promise<void>;
 
