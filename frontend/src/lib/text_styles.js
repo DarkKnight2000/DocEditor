@@ -81,3 +81,39 @@ export function formatsForStyle(style, currentStyle)
     }
     return { inline, align };
 }
+
+/**
+ * Gives pasted content one of the styles, e.g. a pasted <h1> becomes a Heading: the style's inline formats go
+ * on the text (over what was pasted), its alignment on the line endings. Formats the style turns off
+ * (italic for Heading, say) are removed.
+ * @param {Array<{insert?: any, attributes?: Record<string, any>}>} ops the pasted content (Quill delta ops)
+ * @param {string} style one of TEXT_STYLES ids
+ */
+export function applyStyleToOps(ops, style)
+{
+    const { inline, align } = formatsForStyle(style, 'text');
+    /** @param {Record<string, any>} attrs */
+    const tidy = (attrs) => {
+        const kept = Object.fromEntries(Object.entries(attrs).filter(([, v]) => v !== false && v != null));
+        return Object.keys(kept).length ? kept : undefined;
+    };
+    /** @type {Array<{insert: any, attributes?: Record<string, any>}>} */
+    const out = [];
+    for(const op of ops)
+    {
+        if(typeof op.insert !== 'string')
+        {
+            out.push(/** @type {any} */ (op));
+            continue;
+        }
+        for(const part of op.insert.split(/(\n)/))
+        {
+            if(!part) continue;
+            const attributes = part === '\n'
+                ? tidy({ ...op.attributes, ...(align ? { align } : {}) })
+                : tidy({ ...op.attributes, ...inline });
+            out.push(attributes ? { insert: part, attributes } : { insert: part });
+        }
+    }
+    return out;
+}

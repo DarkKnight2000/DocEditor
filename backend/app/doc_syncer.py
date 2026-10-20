@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import os
+import re
 from fastapi import WebSocket
 import app.postgres_utils as db_utils
 import app.delta as delta
@@ -42,6 +43,63 @@ class DocTooLong(Exception):
 
 class DocMismatch(Exception):
     """A client's change doesn't fit the document: its copy has drifted from the server's"""
+
+
+class DisallowedContent(Exception):
+    """A change inserts something Raya doesn't support, such as an image"""
+
+
+# The formats a document may contain, the same list as the editor's (Editor.svelte, `formats`), with the
+# values each may take. Removing a format (value None) is always allowed, so old content can be cleaned up.
+_COLOR = re.compile(r'^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$')
+_SCHEME = re.compile(r'^([a-zA-Z][a-zA-Z0-9+.-]*):')
+_CONTROL = re.compile(r'[\x00-\x1f\x7f]')
+
+
+def _link_allowed(v):
+    """A web, email or phone link, or one without a scheme ("example.com"); the editor's rule too (format_rules.js)"""
+    if not isinstance(v, str) or len(v) > 2048 or _CONTROL.search(v) or v != v.lstrip():
+        return False    # browsers skip leading spaces and control characters, which could hide a javascript: scheme
+    scheme = _SCHEME.match(v)
+    return scheme is None or scheme[1].lower() in ('http', 'https', 'mailto', 'tel', 'sms')
+
+
+_ALLOWED_FORMATS = {
+    'bold': lambda v: v is True,
+    'italic': lambda v: v is True,
+    'underline': lambda v: v is True,
+    'strike': lambda v: v is True,
+    'script': lambda v: v in ('sub', 'super'),
+    'size': lambda v: v in ('small', 'large', 'xlarge', 'huge'),
+    'color': lambda v: isinstance(v, str) and bool(_COLOR.match(v)),
+    'background': lambda v: isinstance(v, str) and bool(_COLOR.match(v)),
+    'link': _link_allowed,
+    'align': lambda v: v in ('center', 'right', 'justify'),
+    'list': lambda v: v in ('ordered', 'bullet'),
+    'indent': lambda v: isinstance(v, int) and not isinstance(v, bool) and 1 <= v <= 8,
+    'table': lambda v: isinstance(v, str) and bool(re.fullmatch(r'[\w-]{1,32}', v)),
+}
+
+
+def sanitize_change(change):
+    """The change with only Raya's formats in it. Other formats are dropped (that changes nothing about
+    the text, so clients stay in step); inserted embeds other than page breaks are refused outright."""
+    clean = []
+    for op in change:
+        op = dict(op)
+        insert = op.get(delta.INSERT)
+        if insert is not None and not isinstance(insert, str) and insert != {'pagebreak': True}:
+            raise DisallowedContent()
+        if isinstance(op.get(delta.RETAIN), dict):
+            raise DisallowedContent()       # changing an embed in place isn't something Raya does
+        attributes = op.pop(delta.ATTRIBUTES, None)
+        if isinstance(attributes, dict):
+            kept = {name: value for name, value in attributes.items()
+                    if name in _ALLOWED_FORMATS and (value is None or _ALLOWED_FORMATS[name](value))}
+            if kept:
+                op[delta.ATTRIBUTES] = kept
+        clean.append(op)
+    return clean
 
 
 def change_base_length(change) -> int:
@@ -213,7 +271,7 @@ class DocSyncer:
 
                 # Start from the client's original change on every attempt, and bring it up to date
                 # with each revision it hasn't seen. Those happened first, so they get priority.
-                changes = copy.deepcopy(rev_changes)
+                changes = copy.deepcopy(sanitize_change(rev_changes))
                 for record in history:
                     if record['rev_id'] > reference_id:
                         changes = delta.transform(record['delta'], changes, True)
@@ -250,9 +308,10 @@ class DocSyncer:
                         "max_chars": self.max_chars
                     })
                 return
-            except DocMismatch:
+            except (DocMismatch, DisallowedContent):
                 # Nothing was saved or broadcast; the sender reloads to start again from the saved document
-                print(f'Refused a change from client {client_id} on doc {self.doc_id}: it doesn\'t fit the document')
+                print(f'Refused a change from client {client_id} on doc {self.doc_id}: '
+                      'it doesn\'t fit the document, or inserts content Raya doesn\'t support')
                 if client_id in self.clients:
                     await self._send(self.clients[client_id], {"type": MessageType.SERVER_RESYNC.value})
                 return

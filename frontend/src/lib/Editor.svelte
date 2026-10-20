@@ -18,7 +18,8 @@
     import PageBreakIcon from "@iconify-svelte/material-symbols/insert-page-break-outline-rounded";
     import { insertTable, inTable, TABLE_ACTIONS, runTableAction } from "$lib/table.js";
     import TableIcon from "@iconify-svelte/material-symbols/table-outline-rounded";
-    import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
+    import { TEXT_STYLES, styleOfFormat, formatsForStyle, applyStyleToOps } from "$lib/text_styles.js";
+    import { dropDisallowedValues, withScheme } from "$lib/format_rules.js";
     import { buildOutline, activeOutlineItem } from "$lib/outline.js";
     import OutlineIcon from "@iconify-svelte/material-symbols/toc-rounded";
     import ClosePaneIcon from "@iconify-svelte/material-symbols/left-panel-close-outline-rounded";
@@ -195,6 +196,13 @@
         // editor
         const quill = new Quill("#editor", {
             theme: "snow",
+            // Only Raya's own formats exist in this editor (the server allows the same list, doc_syncer.py).
+            // Anything else in pasted content (images, fonts, font sizes, quotes, code, headings...) is
+            // dropped and only its text kept; pasted headings are mapped to Raya's styles below.
+            formats: [
+                "bold", "italic", "underline", "strike", "script", "link", "size", "color", "background",
+                "align", "list", "indent", "table", "pagebreak",
+            ],
             modules: {
                 // syntax: true,
                 toolbar: {
@@ -295,13 +303,29 @@
         quill_instance = quill;
         quill_ready = true;
 
+        // pasted headings become Raya's styles instead of plain text: <h1> a Heading, <h2>/<h3> a Subtitle
+        for(const [tag, style] of [["H1", "heading"], ["H2", "subtitle"], ["H3", "subtitle"]])
+        {
+            quill.clipboard.addMatcher(tag, (/** @type {Node} */ _node, /** @type {any} */ delta) => new Delta(applyStyleToOps(delta.ops, style)));
+        }
+        // ...and links and colours the server wouldn't keep (a javascript: link, a colour named "red") are dropped
+        quill.clipboard.addMatcher(Node.ELEMENT_NODE, (/** @type {Node} */ _node, /** @type {any} */ delta) => new Delta(dropDisallowedValues(delta.ops)));
+
+        // a link typed in the link box gets the scheme people leave out ("example.com" -> "https://example.com")
+        const tooltip = /** @type {any} */ (quill.theme).tooltip;
+        const save_tooltip = tooltip.save.bind(tooltip);
+        tooltip.save = () => {
+            if(tooltip.root.getAttribute("data-mode") === "link") tooltip.textbox.value = withScheme(tooltip.textbox.value);
+            save_tooltip();
+        };
+
         // Ctrl+click (Cmd+click on a Mac) opens a link in a new tab, as in Word and Google Docs. A plain
         // click still just places the cursor and shows Quill's link bubble. Only web and email links open.
         quill.root.addEventListener("click", (/** @type {MouseEvent} */ event) => {
             if(!(event.ctrlKey || event.metaKey)) return;
             const link = /** @type {Element} */ (event.target).closest?.("a[href]");
             if(!link || !quill.root.contains(link)) return;
-            const href = link.getAttribute("href") ?? "";
+            const href = withScheme(link.getAttribute("href") ?? "");    // links saved before schemes were added
             if(!/^(https?:|mailto:)/i.test(href)) return;
             event.preventDefault();
             window.open(href, "_blank", "noopener,noreferrer");

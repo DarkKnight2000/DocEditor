@@ -142,6 +142,65 @@ def test_change_reaching_past_the_document_end_is_refused(db):
     run(scenario())
 
 
+def test_sanitize_keeps_rayas_formats_and_drops_the_rest():
+    change = [
+        {'retain': 3, 'attributes': {'bold': True, 'font': 'serif', 'header': 1}},
+        {'insert': 'x', 'attributes': {'color': '#dc2626', 'background': 'url(evil)', 'size': 'giant', 'link': 'javascript:alert(1)'}},
+        {'insert': 'y', 'attributes': {'link': 'https://example.com', 'size': 'xlarge', 'script': 'sub'}},
+        {'insert': '\n', 'attributes': {'align': 'center', 'list': 'checked', 'indent': 2, 'table': 'row-ab12'}},
+        {'retain': 1, 'attributes': {'header': None, 'bold': None}},     # removing formats is always fine
+        {'insert': {'pagebreak': True}},
+        {'delete': 2},
+    ]
+    assert doc_syncer.sanitize_change(change) == [
+        {'retain': 3, 'attributes': {'bold': True}},
+        {'insert': 'x', 'attributes': {'color': '#dc2626'}},
+        {'insert': 'y', 'attributes': {'link': 'https://example.com', 'size': 'xlarge', 'script': 'sub'}},
+        {'insert': '\n', 'attributes': {'align': 'center', 'indent': 2, 'table': 'row-ab12'}},
+        {'retain': 1, 'attributes': {'bold': None}},
+        {'insert': {'pagebreak': True}},
+        {'delete': 2},
+    ]
+
+
+@pytest.mark.parametrize('link, allowed', [
+    ('https://example.com', True), ('MAILTO:a@b.c', True), ('tel:+123', True), ('example.com', True), ('#top', True),
+    ('javascript:alert(1)', False), ('JavaScript:x', False), (' javascript:x', False), ('java\tscript:x', False),
+    ('data:text/html,x', False), ('about:blank', False), ('x' * 2049, False), (5, False),
+])
+def test_sanitize_link_rules(link, allowed):
+    kept = doc_syncer.sanitize_change([{'insert': 'a', 'attributes': {'link': link}}])
+    assert kept == ([{'insert': 'a', 'attributes': {'link': link}}] if allowed else [{'insert': 'a'}])
+
+
+@pytest.mark.parametrize('op', [
+    {'insert': {'image': 'data:image/png;base64,AAAA'}},
+    {'insert': {'video': 'https://example.com/v'}},
+    {'insert': {'pagebreak': True, 'extra': 1}},
+    {'retain': {'table': {}}},
+])
+def test_sanitize_refuses_unsupported_embeds(op):
+    with pytest.raises(doc_syncer.DisallowedContent):
+        doc_syncer.sanitize_change([{'retain': 1}, op])
+
+
+def test_unsupported_formats_are_dropped_and_images_refused_when_editing(db):
+    db.add_doc(text='abc\n', rev=0)
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a, b = await join(syncer, 'a'), await join(syncer, 'b')
+        await syncer.add_revision(None, 'a', [{'insert': 'Hi', 'attributes': {'bold': True, 'font': 'serif'}}], 0)
+        assert db.docs['doc']['head']['delta'] == [{'insert': 'Hi', 'attributes': {'bold': True}}, {'insert': 'abc\n'}]
+        assert json.loads(b.of_type(REV)[-1]['content']) == [{'insert': 'Hi', 'attributes': {'bold': True}}]
+        # an image is refused: nothing saved or sent on, and the sender resyncs
+        await syncer.add_revision(None, 'a', [{'insert': {'image': 'x.png'}}], 1)
+        assert db.docs['doc']['head']['rev_id'] == 1
+        assert a.of_type(MessageType.SERVER_RESYNC.value) == [{'type': MessageType.SERVER_RESYNC.value}]
+        assert len(b.of_type(REV)) == 1
+    run(scenario())
+
+
 def test_edit_based_on_unknown_revision_is_rejected(db):
     db.add_doc(text='xy', rev=3)
 

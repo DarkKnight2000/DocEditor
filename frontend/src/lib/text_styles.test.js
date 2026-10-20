@@ -1,7 +1,7 @@
 // Run with: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { styleOfFormat, formatsForStyle } from './text_styles.js';
+import { styleOfFormat, formatsForStyle, applyStyleToOps } from './text_styles.js';
 
 test('styleOfFormat reads the style from the size', () => {
     assert.equal(styleOfFormat({ size: 'huge', bold: true, align: 'center' }), 'title');
@@ -63,4 +63,15 @@ test('leaving Heading removes its emphasis and centring', () => {
     // Title and Heading are both centred, so switching between them keeps the centring
     assert.equal(formatsForStyle('title', 'heading').align, 'center');
     assert.equal(formatsForStyle('heading', 'title').align, 'center');
+});
+
+test('pasted content can be given a style: inline formats on the text, alignment on the line ending', () => {
+    const pasted = [{ insert: 'Plan ' }, { insert: 'B', attributes: { italic: true, color: '#dc2626' } }, { insert: '\n' }];
+    assert.deepEqual(applyStyleToOps(pasted, 'heading'), [
+        { insert: 'Plan ', attributes: { size: 'xlarge', bold: true } },
+        { insert: 'B', attributes: { color: '#dc2626', size: 'xlarge', bold: true } },
+        { insert: '\n', attributes: { align: 'center' } },
+    ]);
+    assert.deepEqual(applyStyleToOps([{ insert: 'Notes' }], 'subtitle'),
+        [{ insert: 'Notes', attributes: { size: 'large', bold: true, italic: true } }]);
 });

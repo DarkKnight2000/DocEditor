@@ -9,6 +9,7 @@
 import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, ShadingType, Table, TableCell,
     TableRow, TextRun, WidthType } from 'docx';
 import { styleOfFormat } from './text_styles.js';
+import { withScheme } from './format_rules.js';
 
 /**
  * @typedef {{ text: string, attributes: Record<string, any> }} Run
@@ -115,12 +116,15 @@ export function wordColor(value)
 }
 
 /**
- * Only http(s) and mailto links are kept as links; anything else becomes plain text.
+ * Only http(s) and mailto links are kept as links; anything else becomes plain text. A link saved without
+ * its scheme ("example.com") gets one.
  * @param {any} link
  */
 function safeLink(link)
 {
-    return typeof link === 'string' && /^(https?:|mailto:)/i.test(link) ? link : null;
+    if(typeof link !== 'string') return null;
+    link = withScheme(link);
+    return /^(https?:|mailto:)/i.test(link) ? link : null;
 }
 
 /**
