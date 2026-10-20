@@ -43,10 +43,15 @@
     }
 }
 
-/* text styles (text_styles.js): Title uses 'huge', Subtitle 'large', Tiny 'small' */
+/* text styles (text_styles.js): Title uses 'huge', Heading 'xlarge', Subtitle 'large', Tiny 'small' */
 .ql-editor .ql-size-huge {
-    font-size: 2em;
-    line-height: 1.25;
+    font-size: 2.25em;
+    line-height: 1.2;
+}
+
+.ql-editor .ql-size-xlarge {
+    font-size: 1.6em;
+    line-height: 1.3;
 }
 
 .ql-editor .ql-size-large {
@@ -60,6 +65,20 @@
 
 /* the space around Title and Subtitle lines is set in Editor.svelte (space_headings), which can tell
    a line that starts with big text from a normal line with a big word in it */
+
+/* A manual page break (page_break.js): the grey desk showing between two pages, across the full width
+   of the sheet (past the page margins and over its border), with each page's margin above and below */
+.ql-editor hr.page-break {
+    @apply bg-gray-50 border-y border-x-0 border-gray-200 cursor-default;
+    height: 20px;
+    margin: 2rem calc(-1.5rem - 1px);
+}
+
+@media (min-width: 640px) {
+    .ql-editor hr.page-break {
+        margin: 4rem calc(-4.5rem - 1px);
+    }
+}
 
 /* --- the toolbar ------------------------------------------------------------ */
 

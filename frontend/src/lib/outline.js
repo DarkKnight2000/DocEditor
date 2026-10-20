@@ -1,14 +1,17 @@
-// Document outline: the Title and Subtitle lines of a document, for the editor's left pane.
+// Document outline: the Title, Heading and Subtitle lines of a document, for the editor's left pane.
 import { styleOfFormat } from './text_styles.js';
 
 /**
- * @typedef {{ index: number, text: string, level: 1 | 2 }} OutlineItem
+ * @typedef {{ index: number, text: string, level: 1 | 2 | 3 }} OutlineItem
  *   index: position of the line's first character in the document
- *   level: 1 for a Title, 2 for a Subtitle
+ *   level: 1 for a Title, 2 for a Heading, 3 for a Subtitle
  */
 
+/** @type {Record<string, 1 | 2 | 3>} */
+const LEVELS = { title: 1, heading: 2, subtitle: 3 };
+
 /**
- * Lists the Title and Subtitle lines of a document. A line's style comes from the size of its
+ * Lists the Title, Heading and Subtitle lines of a document. A line's style comes from the size of its
  * first character, the same way the style dropdown applies a style to whole lines.
  * Empty headings are left out.
  * @param {Array<{insert?: any, attributes?: Record<string, any>}>} ops document contents (quill.getContents().ops)
@@ -27,9 +30,10 @@ export function buildOutline(ops)
     const endLine = () => {
         const style = styleOfFormat({ size: lineSize ?? undefined });
         const title = text.replace(/\s+/g, ' ').trim();
-        if(title && (style === 'title' || style === 'subtitle'))
+        const level = LEVELS[style];
+        if(title && level)
         {
-            outline.push({ index: lineStart, text: title, level: style === 'title' ? 1 : 2 });
+            outline.push({ index: lineStart, text: title, level });
         }
         text = '';
         lineSize = undefined;
@@ -40,7 +44,13 @@ export function buildOutline(ops)
         if(typeof op.insert !== 'string')
         {
             // an embed (e.g. an image) counts as one character
-            if(op.insert !== undefined)
+            if(op.insert?.pagebreak)
+            {
+                // a page break is a line of its own: the next line starts after it
+                index += 1;
+                lineStart = index;
+            }
+            else if(op.insert !== undefined)
             {
                 if(lineSize === undefined) lineSize = op.attributes?.size ?? null;
                 index += 1;

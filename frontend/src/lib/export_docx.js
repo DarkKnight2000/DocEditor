@@ -1,18 +1,19 @@
 // Word (.docx) export of a document, built from its Quill contents with the "docx" package.
 // Kept free of Quill/DOM so it can be unit tested; Editor.svelte loads it only when someone downloads.
 //
-// Mapping: Title and Subtitle lines become Word's Heading 1 and Heading 2 (so Word's navigation pane
-// shows the same outline as the editor), Tiny text a smaller size, and the toolbar formats their
-// Word equivalents: bold, italic, underline, strikethrough, superscript/subscript, links, alignment,
-// numbered and bulleted lists.
-import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, Paragraph, TextRun } from 'docx';
+// Mapping: the Title line becomes Word's Title, Heading and Subtitle lines Heading 1 and Heading 2 (so Word's
+// navigation pane shows the same sections as the editor's outline), Tiny text a smaller size, and the
+// toolbar formats their Word equivalents: bold, italic, underline, strikethrough, superscript/subscript, links, alignment,
+// numbered and bulleted lists. Manual page breaks become Word page breaks.
+import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, TextRun } from 'docx';
 import { styleOfFormat } from './text_styles.js';
 
 /**
  * @typedef {{ text: string, attributes: Record<string, any> }} Run
- * @typedef {{ runs: Run[], attributes: Record<string, any>, style: string }} Line
+ * @typedef {{ runs: Run[], attributes: Record<string, any>, style: string, pageBreak?: boolean }} Line
  *   attributes: the line's formats (align, list, indent), from the newline that ends it
  *   style: 'title' | 'subtitle' | 'text' | 'tiny', from the size of the line's first character
+ *   pageBreak: a manual page break (page_break.js) instead of text
  */
 
 /**
@@ -29,8 +30,18 @@ export function deltaToLines(ops)
 
     for(const op of ops)
     {
-        // embeds (images and the like) aren't in the toolbar; leave them out of the export
-        if(typeof op.insert !== 'string') continue;
+        if(typeof op.insert !== 'string')
+        {
+            // a page break is a line of its own; other embeds (pasted images and the like) aren't
+            // supported by Raya, so they're left out
+            if(op.insert?.pagebreak)
+            {
+                if(runs.length) lines.push({ runs, attributes: {}, style: 'text' });
+                runs = [];
+                lines.push({ runs: [], attributes: {}, style: 'text', pageBreak: true });
+            }
+            continue;
+        }
         const parts = op.insert.split('\n');
         parts.forEach((part, i) => {
             if(part) runs.push({ text: part, attributes: op.attributes ?? {} });
@@ -50,9 +61,9 @@ export function deltaToLines(ops)
 
 // Word sizes are in half-points. Body text is 12pt; the others keep the editor's proportions
 // (quill-editor.css: Title 2em, Subtitle 1.35em, Tiny 0.85em).
-const SIZE = { huge: 48, large: 32, small: 20 };
+const SIZE = { huge: 54, xlarge: 38, large: 32, small: 20 };
 // sizes that come from a heading's paragraph style, so its text runs don't repeat them
-const STYLE_SIZE = { title: 'huge', subtitle: 'large', tiny: undefined, text: undefined };
+const STYLE_SIZE = { title: 'huge', heading: 'xlarge', subtitle: 'large', tiny: undefined, text: undefined };
 
 const ALIGNMENT = { center: AlignmentType.CENTER, right: AlignmentType.RIGHT, justify: AlignmentType.JUSTIFIED };
 
@@ -100,6 +111,11 @@ export function buildDocx(ops, title)
     let inNumberedList = false;
 
     const paragraphs = lines.map((line) => {
+        if(line.pageBreak)
+        {
+            inNumberedList = false;
+            return new Paragraph({ children: [new PageBreak()] });
+        }
         /** @type {(TextRun | ExternalHyperlink)[]} */
         const children = line.runs.map((run) => {
             const link = safeLink(run.attributes.link);
@@ -115,7 +131,8 @@ export function buildDocx(ops, title)
 
         return new Paragraph({
             children,
-            heading: line.style === 'title' ? HeadingLevel.HEADING_1
+            heading: line.style === 'title' ? HeadingLevel.TITLE
+                : line.style === 'heading' ? HeadingLevel.HEADING_1
                 : line.style === 'subtitle' ? HeadingLevel.HEADING_2 : undefined,
             alignment: ALIGNMENT[/** @type {keyof typeof ALIGNMENT} */ (a.align)],
             numbering: numbered ? { reference: 'numbered', level, instance: listInstance } : undefined,
@@ -130,8 +147,13 @@ export function buildDocx(ops, title)
             default: { document: { run: { size: 24 }, paragraph: { spacing: { after: 120 } } } },
             paragraphStyles: [
                 {
-                    id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+                    id: 'Title', name: 'Title', basedOn: 'Normal', next: 'Normal', quickFormat: true,
                     run: { size: SIZE.huge, bold: true, color: '111827' },
+                    paragraph: { spacing: { after: 200 }, keepNext: true },
+                },
+                {
+                    id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+                    run: { size: SIZE.xlarge, bold: true, color: '111827' },
                     paragraph: { spacing: { before: 360, after: 160 }, keepNext: true },
                 },
                 {

@@ -25,7 +25,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## Screenshots
 
-**Editor**: the outline pane follows the cursor, and the text-style menu sets Title, Subtitle, Text or Tiny.
+**Editor**: the outline pane follows the cursor, and the text-style menu sets Title, Heading, Subtitle, Text or Tiny.
 
 ![Editor with the outline pane](docs/screenshots/editor.png)
 
@@ -44,9 +44,10 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 **Editing**
 - Rich text: bold, italic, underline, strikethrough, superscript and subscript, alignment, lists, links.
-- One-click text styles: *Title* (large, bold, centred), *Subtitle* (bold italic), *Text* and *Tiny*. Pressing Enter after a heading switches back to Text.
-- An **outline pane** lists every Title and Subtitle, jumps to a section on click and highlights the section the cursor is in.
-- **Download as Word (.docx)**, built in the browser. Titles and Subtitles become Word headings, so Word's navigation pane shows the same outline, and lists, links and formatting carry over. The converter only loads when it's first used.
+- One-click text styles: *Title* (largest, bold, centred, one per document), *Heading* (bold, centred, for sections), *Subtitle* (bold italic), *Text* and *Tiny*. Pressing Enter after a heading switches back to Text.
+- An **outline pane** lists every Title, Heading and Subtitle as three levels, jumps to a section on click and highlights the section the cursor is in.
+- **Page breaks:** a toolbar button (or Ctrl+Enter) starts a new page, shown as a gap between pages. Downloads to Word keep them as real page breaks.
+- **Download as Word (.docx)**, built in the browser. Title becomes Word's Title, and Headings and Subtitles become Word headings, so Word's navigation pane shows the same sections, and lists, links and formatting carry over. The converter only loads when it's first used.
 
 **Sharing and accounts**
 - Google Sign-In; Raya never sees a password.

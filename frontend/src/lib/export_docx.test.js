@@ -44,16 +44,19 @@ test('embeds are skipped', () => {
     assert.equal(lines[0].runs.map(r => r.text).join(''), 'ab');
 });
 
-test('titles and subtitles become Word headings, with alignment', async () => {
+test('Title, Heading and Subtitle become Word Title, Heading 1 and Heading 2, with alignment', async () => {
     const xml = await documentXml([
         title('Trip'), { insert: '\n', attributes: { align: 'center' } },
+        { insert: 'Goa', attributes: { size: 'xlarge', bold: true } }, { insert: '\n', attributes: { align: 'center' } },
         subtitle('Day 1'), { insert: '\n' },
         { insert: 'Body\n' },
     ]);
-    assert.match(xml, /<w:pStyle w:val="Heading1"\/>/);
-    assert.match(xml, /<w:pStyle w:val="Heading2"\/>/);
-    assert.match(xml, /<w:jc w:val="center"\/>/);
+    const styles = [...xml.matchAll(/<w:pStyle w:val="(\w+)"\/>/g)].map(m => m[1]);
+    assert.deepEqual(styles, ['Title', 'Heading1', 'Heading2']);
+    assert.equal((xml.match(/<w:jc w:val="center"\/>/g) ?? []).length, 2);
     assert.match(xml, /Body/);
+    // the heading styles carry the sizes, so the text runs don't repeat them
+    assert.doesNotMatch(xml, /<w:sz w:val="(54|38|32)"\/>/);
 });
 
 test('inline formats are kept', async () => {
@@ -101,6 +104,32 @@ test('numbered lists restart after other text; bullets use bullet numbering', as
     assert.equal(numIds[0], numIds[1], 'a and b are one list');
     assert.notEqual(numIds[1], numIds[2], 'c starts a new list');
     assert.notEqual(numIds[3], numIds[2], 'the bullet uses its own numbering');
+});
+
+test('a page break is its own line between the text around it', () => {
+    const lines = deltaToLines([{ insert: 'Page one\n' }, { insert: { pagebreak: true } }, { insert: 'Page two\n' }]);
+    assert.deepEqual(lines.map(l => l.pageBreak ? '---' : l.runs.map(r => r.text).join('')), ['Page one', '---', 'Page two']);
+});
+
+test('page breaks become Word page breaks; other embeds are left out', async () => {
+    const xml = await documentXml([
+        { insert: 'Before\n' }, { insert: { pagebreak: true } }, { insert: 'After' },
+        { insert: { image: 'data:image/png;base64,AAAA' } }, { insert: '\n' },
+    ]);
+    assert.equal((xml.match(/<w:br w:type="page"\/>/g) ?? []).length, 1);
+    assert.ok(xml.indexOf('Before') < xml.indexOf('w:type="page"') && xml.indexOf('w:type="page"') < xml.indexOf('After'));
+    assert.doesNotMatch(xml, /<w:drawing|<pic:/);
+});
+
+test('a numbered list restarts after a page break', async () => {
+    const xml = await documentXml([
+        { insert: 'a' }, { insert: '\n', attributes: { list: 'ordered' } },
+        { insert: { pagebreak: true } },
+        { insert: 'b' }, { insert: '\n', attributes: { list: 'ordered' } },
+    ]);
+    const numIds = [...xml.matchAll(/<w:numId w:val="(\d+)"\/>/g)].map(m => m[1]);
+    assert.equal(numIds.length, 2);
+    assert.notEqual(numIds[0], numIds[1]);
 });
 
 test('file names drop characters file systems reject', () => {

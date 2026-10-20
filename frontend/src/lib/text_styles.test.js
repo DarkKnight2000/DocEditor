@@ -45,3 +45,22 @@ test('a mixed selection is normalised', () => {
     assert.deepEqual(formatsForStyle('text', ''),
         { inline: { size: false, bold: false, italic: false }, align: false });
 });
+
+test('Heading sits between Title and Subtitle: bold and centred, one size down from Title', () => {
+    assert.equal(styleOfFormat({ size: 'xlarge', bold: true, align: 'center' }), 'heading');
+    assert.deepEqual(formatsForStyle('heading', 'text'),
+        { inline: { size: 'xlarge', bold: true, italic: false }, align: 'center' });
+    // from Subtitle: the italic goes, the centring comes
+    assert.deepEqual(formatsForStyle('heading', 'subtitle'),
+        { inline: { size: 'xlarge', bold: true, italic: false }, align: 'center' });
+});
+
+test('leaving Heading removes its emphasis and centring', () => {
+    assert.deepEqual(formatsForStyle('text', 'heading'),
+        { inline: { size: false, bold: false, italic: false }, align: false });
+    assert.equal(formatsForStyle('subtitle', 'heading').align, false);
+    assert.equal(formatsForStyle('tiny', 'heading').align, false);
+    // Title and Heading are both centred, so switching between them keeps the centring
+    assert.equal(formatsForStyle('title', 'heading').align, 'center');
+    assert.equal(formatsForStyle('heading', 'title').align, 'center');
+});

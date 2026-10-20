@@ -86,6 +86,24 @@ def test_concurrent_edit_is_transformed_against_revisions_the_client_missed(db):
     run(scenario())
 
 
+def test_page_break_is_one_character_for_concurrent_edits(db):
+    # a page break is an embed, { insert: { pagebreak: true } }; edits after it must shift by exactly one
+    db.add_doc(text='Page one. Page two.\n', rev=0)
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a, b = await join(syncer, 'a'), await join(syncer, 'b')
+        await syncer.add_revision(None, 'a', [{'retain': 10}, {'insert': {'pagebreak': True}}], 0)      # rev 1
+        # b types at the end of "Page two" without having seen the break
+        await syncer.add_revision(None, 'b', [{'retain': 18}, {'insert': '!'}], 0)                     # rev 2
+        assert db.docs['doc']['head']['delta'] == [
+            {'insert': 'Page one. '}, {'insert': {'pagebreak': True}}, {'insert': 'Page two!.\n'}]
+        assert json.loads(a.of_type(REV)[-1]['content']) == [{'retain': 19}, {'insert': '!'}]
+        # the break counts as one character towards the size limit
+        assert text_length(db.docs['doc']['head']['delta']) == 21
+    run(scenario())
+
+
 def test_edit_based_on_unknown_revision_is_rejected(db):
     db.add_doc(text='xy', rev=3)
 

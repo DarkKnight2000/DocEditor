@@ -16,15 +16,15 @@ test('lists titles and subtitles with their positions', () => {
     ];
     assert.deepEqual(buildOutline(ops), [
         { index: 0, text: 'Goa trip', level: 1 },
-        { index: 25, text: 'Flights', level: 2 },
-        { index: 49, text: 'Hotels', level: 2 },
+        { index: 25, text: 'Flights', level: 3 },
+        { index: 49, text: 'Hotels', level: 3 },
     ]);
 });
 
 test('a line takes the style of its first character', () => {
     // "Day 1" is a subtitle even though a later word on the line is normal size
     const ops = [subtitle('Day 1'), { insert: ': beach\nnormal line with ' }, title('huge'), { insert: ' word\n' }];
-    assert.deepEqual(buildOutline(ops), [{ index: 0, text: 'Day 1: beach', level: 2 }]);
+    assert.deepEqual(buildOutline(ops), [{ index: 0, text: 'Day 1: beach', level: 3 }]);
 });
 
 test('ignores empty headings, plain text and tiny text', () => {
@@ -49,4 +49,27 @@ test('activeOutlineItem finds the heading the cursor is under', () => {
     assert.equal(activeOutlineItem(outline, 99), 2);
     assert.equal(activeOutlineItem([{ index: 10, text: 'A', level: 1 }], 3), -1, 'above the first heading');
     assert.equal(activeOutlineItem([], 5), -1);
+});
+
+test('a title right after a page break is listed, at its own position', () => {
+    const ops = [
+        title('One'), { insert: '\n', attributes: { align: 'center' } },     // 0..3
+        { insert: 'text\n' },                                                // 4..8
+        { insert: { pagebreak: true } },                                     // 9
+        title('Two'), { insert: '\n', attributes: { align: 'center' } },     // 10..13
+    ];
+    assert.deepEqual(buildOutline(ops), [
+        { index: 0, text: 'One', level: 1 },
+        { index: 10, text: 'Two', level: 1 },
+    ]);
+});
+
+test('Headings are the level between Titles and Subtitles', () => {
+    const heading = (t) => ({ insert: t, attributes: { size: 'xlarge', bold: true } });
+    const ops = [
+        title('Book'), { insert: '\n', attributes: { align: 'center' } },          // 0..4
+        heading('Chapter'), { insert: '\n', attributes: { align: 'center' } },     // 5..12
+        subtitle('Section'), { insert: '\n' },                                     // 13..20
+    ];
+    assert.deepEqual(buildOutline(ops).map((i) => [i.text, i.level]), [['Book', 1], ['Chapter', 2], ['Section', 3]]);
 });

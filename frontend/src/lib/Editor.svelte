@@ -1,6 +1,12 @@
 <script>
     import Quill from "quill";
     import { Delta } from "quill";
+
+    // Text sizes the style menu uses (text_styles.js): Quill's own small, large and huge, plus Raya's
+    // xlarge for Heading, between Title (huge) and Subtitle (large)
+    const SizeClass = /** @type {any} */ (Quill.import("attributors/class/size"));
+    SizeClass.whitelist = ["small", "large", "xlarge", "huge"];
+    Quill.register(SizeClass, true);
     import "quill/dist/quill.snow.css";
     import { onDestroy, onMount, tick } from "svelte";
     import "$lib/styles/quill-editor.css";
@@ -8,6 +14,8 @@
     import { dev } from "$app/environment";
     import { createClientState, applyInit, applyLocalChange, takeOutgoing, applyAck, applyServerRev, exceedsCharLimit, cursorForServer, cursorFromServer } from "$lib/sync_client.js";
     import RemoteCursors from "$lib/RemoteCursors.svelte";
+    import { insertPageBreak, removePageBreakAt } from "$lib/page_break.js";
+    import PageBreakIcon from "@iconify-svelte/material-symbols/insert-page-break-outline-rounded";
     import { TEXT_STYLES, styleOfFormat, formatsForStyle } from "$lib/text_styles.js";
     import { buildOutline, activeOutlineItem } from "$lib/outline.js";
     import OutlineIcon from "@iconify-svelte/material-symbols/toc-rounded";
@@ -183,9 +191,44 @@
                 // syntax: true,
                 toolbar: {
                     container: "#editor-toolbar",
+                    handlers: {
+                        /** @this {any} */
+                        pagebreak() { insertPageBreak(this.quill); },
+                    },
                 },
                 keyboard: {
                     bindings: {
+                        // Ctrl+Enter (Cmd+Enter on a Mac) inserts a page break, as in Word and Google Docs
+                        page_break: {
+                            key: "Enter",
+                            shortKey: true,
+                            /** @this {any} */
+                            handler() {
+                                insertPageBreak(this.quill);
+                                return false;
+                            },
+                        },
+                        // Backspace at the start of the line after a page break, or Delete at the end of the
+                        // line before one, removes just the break. Quill's own handlers would join the lines
+                        // and give the text line the break's (empty) formats, losing e.g. a Title's centring.
+                        page_break_backspace: {
+                            key: "Backspace",
+                            collapsed: true,
+                            offset: 0,
+                            /** @this {any} */
+                            handler(/** @type {any} */ range) {
+                                return !removePageBreakAt(this.quill, range.index - 1);
+                            },
+                        },
+                        page_break_delete: {
+                            key: "Delete",
+                            collapsed: true,
+                            suffix: /^$/,
+                            /** @this {any} */
+                            handler(/** @type {any} */ range) {
+                                return !removePageBreakAt(this.quill, range.index + 1);
+                            },
+                        },
                         // Enter at the end of a Title or Subtitle line starts a plain Text line instead of
                         // carrying the heading on, like headings in other editors. (Enter in the middle of a
                         // heading keeps both halves as heading.) Runs before Quill's own Enter handler.
@@ -196,7 +239,7 @@
                             /** @this {any} */
                             handler(/** @type {any} */ range, /** @type {any} */ context) {
                                 const style = styleOfFormat(context.format);
-                                if (style !== "title" && style !== "subtitle") return true;   // Quill's default
+                                if (style !== "title" && style !== "heading" && style !== "subtitle") return true;   // Quill's default
                                 const editor = this.quill;
                                 // the heading line keeps its line formats (e.g. Title's centring) ...
                                 const keep = context.format.align ? { align: context.format.align } : {};
@@ -219,8 +262,8 @@
         quill_ready = true;
 
         /**
-         * 'title' or 'subtitle' when the line's first text is huge or large (as the outline and the style
-         * menu decide), otherwise null. Big words later in a normal line don't make it a heading.
+         * 'title', 'heading' or 'subtitle' when the line's first text is huge, xlarge or large (as the outline
+         * and the style menu decide), otherwise null. Big words later in a normal line don't make it a heading.
          * @param {Element} el a line of the editor
          */
         function heading_level(el)
@@ -228,15 +271,16 @@
             const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
             let node;
             while((node = walker.nextNode()) && !node.textContent) {}
-            const sized = node?.parentElement?.closest('.ql-size-huge, .ql-size-large');
+            const sized = node?.parentElement?.closest('.ql-size-huge, .ql-size-xlarge, .ql-size-large');
             if(!sized || !el.contains(sized)) return null;
-            return sized.classList.contains('ql-size-huge') ? 'title' : 'subtitle';
+            return sized.classList.contains('ql-size-huge') ? 'title'
+                : sized.classList.contains('ql-size-xlarge') ? 'heading' : 'subtitle';
         }
 
-        // Space around Title and Subtitle lines, more above (a new section) than below (its own text);
-        // a heading at the very top of the document sits flush with the page margin. CSS alone can't tell
+        // Space around Title, Heading and Subtitle lines, more above (a new section) than below (its own text);
+        // a heading at the top of a page sits flush with the page margin. CSS alone can't tell
         // whether a line *starts* with big text, so the lines are picked here, into a stylesheet of their own.
-        const HEADING_SPACE = { title: ['1.75rem', '0.75rem'], subtitle: ['1.25rem', '0.5rem'] };
+        const HEADING_SPACE = { title: ['1.75rem', '0.75rem'], heading: ['1.5rem', '0.6rem'], subtitle: ['1.25rem', '0.5rem'] };
         const heading_style = document.createElement('style');
         document.head.appendChild(heading_style);
         function space_headings()
@@ -245,7 +289,9 @@
                 const level = el.tagName === 'P' ? heading_level(el) : null;
                 if(!level) return [];
                 const [above, below] = HEADING_SPACE[level];
-                return [`#editor .ql-editor > :nth-child(${i + 1}) { margin-top: ${i === 0 ? '0' : above}; margin-bottom: ${below}; }`];
+                // at the top of the first page or of a page after a page break it sits flush with the margin
+                const page_top = i === 0 || el.previousElementSibling?.classList.contains('page-break');
+                return [`#editor .ql-editor > :nth-child(${i + 1}) { margin-top: ${page_top ? '0' : above}; margin-bottom: ${below}; }`];
             }).join('\n');
             if(heading_style.textContent !== rules) heading_style.textContent = rules;
         }
@@ -453,6 +499,9 @@
             <!-- <button class="ql-code-block" title="Clean button" value="super"></button> -->
             <!-- <button class="ql-color" title="Clean button" value="super"></button>
             <button class="ql-background" title="Clean button" value="super"></button> -->
+            <button type="button" class="ql-pagebreak" title="Page break (Ctrl+Enter)" aria-label="Insert page break">
+                <PageBreakIcon aria-hidden="true" />
+            </button>
             <button class="ql-clean" title="Clean button" value="super"></button>
         </span>
         {#if max_chars !== Infinity}
@@ -485,14 +534,15 @@
                 <nav class="flex-1 overflow-y-auto px-2 pb-4">
                     {#each outline as item, i (item.index)}
                         <button class="block w-full text-left rounded-md py-1.5 pr-2 truncate cursor-pointer
-                                {item.level === 1 ? 'pl-2 font-bold text-gray-800' : 'pl-6 text-sm text-gray-600'}
+                                {item.level === 1 ? 'pl-2 font-bold text-gray-800'
+                                    : item.level === 2 ? 'pl-4 font-semibold text-gray-700' : 'pl-7 text-sm text-gray-600'}
                                 {i === active_heading ? 'bg-yellow-100' : 'hover:bg-gray-200'}"
                             title={item.text} aria-current={i === active_heading ? 'location' : undefined}
                             onclick={() => go_to_heading(item)}>
                             {item.text}
                         </button>
                     {:else}
-                        <p class="px-2 text-sm text-gray-400">Titles and subtitles you add will appear here.</p>
+                        <p class="px-2 text-sm text-gray-400">Titles, headings and subtitles you add will appear here.</p>
                     {/each}
                 </nav>
             </aside>
