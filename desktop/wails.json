@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Raya",
+  "outputfilename": "Raya",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5174",
+  "author": {
+    "name": "Rishi Kaley",
+    "email": "rishikaley@gmail.com"
+  },
+  "info": {
+    "productName": "Raya",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 Rishi Kaley",
+    "comments": "A minimal document editor for files on your computer"
+  }
+}

@@ -1,0 +1,14 @@
+@import 'tailwindcss';
+
+/* the bundled variable font (@fontsource-variable/nunito), the same face the web app loads from Google Fonts */
+@theme {
+  --font-nunito: "Nunito Variable", "Nunito", sans-serif;
+}
+
+@utility font-nunito {
+  font-family: var(--font-nunito);
+}
+
+html, body {
+  @apply h-full overflow-hidden bg-white;
+}

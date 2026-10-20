@@ -1,0 +1,19 @@
+{
+	"compilerOptions": {
+		"moduleResolution": "bundler",
+		"module": "esnext",
+		"target": "es2022",
+		"allowJs": true,
+		"checkJs": true,
+		"strict": true,
+		"skipLibCheck": true,
+		"resolveJsonModule": true,
+		"types": ["svelte", "vite/client"],
+		"paths": {
+			"$lib": ["../../frontend/src/lib"],
+			"$lib/*": ["../../frontend/src/lib/*"],
+			"$web_static/*": ["../../frontend/static/*"]
+		}
+	},
+	"include": ["src/**/*.js", "src/**/*.svelte"]
+}

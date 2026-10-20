@@ -1,0 +1,7 @@
+build/bin
+frontend/dist/*
+!frontend/dist/.gitkeep
+frontend/node_modules
+# made from build/appicon.png by wails build
+build/windows/icon.ico
+frontend/package.json.md5
