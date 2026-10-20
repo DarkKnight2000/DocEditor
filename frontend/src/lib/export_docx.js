@@ -4,8 +4,9 @@
 // Mapping: the Title line becomes Word's Title, Heading and Subtitle lines Heading 1 and Heading 2 (so Word's
 // navigation pane shows the same sections as the editor's outline), Tiny text a smaller size, and the
 // toolbar formats their Word equivalents: bold, italic, underline, strikethrough, superscript/subscript, links, alignment,
-// numbered and bulleted lists. Manual page breaks become Word page breaks, and tables Word tables.
-import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, Table, TableCell,
+// numbered and bulleted lists, text and highlight colours. Manual page breaks become Word page breaks,
+// and tables Word tables.
+import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, ShadingType, Table, TableCell,
     TableRow, TextRun, WidthType } from 'docx';
 import { styleOfFormat } from './text_styles.js';
 
@@ -77,7 +78,11 @@ function textRun(run, lineStyle)
     const a = run.attributes;
     const size = a.size && a.size !== STYLE_SIZE[/** @type {keyof typeof STYLE_SIZE} */ (lineStyle)]
         ? SIZE[/** @type {keyof typeof SIZE} */ (a.size)] : undefined;
+    const color = wordColor(a.color);
+    const highlight = wordColor(a.background);
     return new TextRun({
+        color,
+        shading: highlight ? { type: ShadingType.CLEAR, color: 'auto', fill: highlight } : undefined,
         text: run.text,
         bold: a.bold || undefined,
         italics: a.italic || undefined,
@@ -88,6 +93,25 @@ function textRun(run, lineStyle)
         size,
         style: a.link ? 'Hyperlink' : undefined,
     });
+}
+
+/**
+ * A colour as Word wants it (six hex digits, no #), from the forms Quill stores: '#rrggbb', '#rgb' or
+ * 'rgb(r, g, b)' (pasted content). Anything else, like a colour name, is left out.
+ * @param {any} value
+ * @returns {string | undefined}
+ */
+export function wordColor(value)
+{
+    if(typeof value !== 'string') return undefined;
+    const v = value.trim().toLowerCase();
+    let m = v.match(/^#([0-9a-f]{6})$/);
+    if(m) return m[1].toUpperCase();
+    m = v.match(/^#([0-9a-f])([0-9a-f])([0-9a-f])$/);
+    if(m) return (m[1] + m[1] + m[2] + m[2] + m[3] + m[3]).toUpperCase();
+    m = v.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/);
+    if(m) return m.slice(1, 4).map((n) => Math.min(255, Number(n)).toString(16).padStart(2, '0')).join('').toUpperCase();
+    return undefined;
 }
 
 /**

@@ -295,6 +295,25 @@
         quill_instance = quill;
         quill_ready = true;
 
+        // Ctrl+click (Cmd+click on a Mac) opens a link in a new tab, as in Word and Google Docs. A plain
+        // click still just places the cursor and shows Quill's link bubble. Only web and email links open.
+        quill.root.addEventListener("click", (/** @type {MouseEvent} */ event) => {
+            if(!(event.ctrlKey || event.metaKey)) return;
+            const link = /** @type {Element} */ (event.target).closest?.("a[href]");
+            if(!link || !quill.root.contains(link)) return;
+            const href = link.getAttribute("href") ?? "";
+            if(!/^(https?:|mailto:)/i.test(href)) return;
+            event.preventDefault();
+            window.open(href, "_blank", "noopener,noreferrer");
+        });
+        // while Ctrl/Cmd is held, links show the hand pointer (quill-editor.css), hinting they can be opened
+        const set_links_openable = (/** @type {boolean} */ on) => quill.container.classList.toggle("links-openable", on);
+        const on_modifier = (/** @type {KeyboardEvent} */ event) => set_links_openable(event.ctrlKey || event.metaKey);
+        const on_blur = () => set_links_openable(false);
+        window.addEventListener("keydown", on_modifier);
+        window.addEventListener("keyup", on_modifier);
+        window.addEventListener("blur", on_blur);
+
         /**
          * 'title', 'heading' or 'subtitle' when the line's first text is huge, xlarge or large (as the outline
          * and the style menu decide), otherwise null. Big words later in a normal line don't make it a heading.
@@ -499,6 +518,9 @@
             clearInterval(interval_id);
             socket.close();
             heading_style.remove();
+            window.removeEventListener("keydown", on_modifier);
+            window.removeEventListener("keyup", on_modifier);
+            window.removeEventListener("blur", on_blur);
         };
     });
 
@@ -540,6 +562,21 @@
             <button class="ql-italic" title="Italic button"></button>
             <button class="ql-underline" title="Underline button"></button>
             <button class="ql-strike" title="Strike button"></button>
+            <!-- Text colour and highlight: Quill turns these into colour pickers. The first, empty option
+                 removes the colour. A small palette that reads well on white (Tailwind's 600s for text,
+                 200s for highlights). -->
+            <select class="ql-color" title="Text colour">
+                <option selected></option>
+                {#each ['#4b5563', '#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0d9488', '#2563eb', '#7c3aed', '#db2777'] as color}
+                    <option value={color}></option>
+                {/each}
+            </select>
+            <select class="ql-background" title="Highlight colour">
+                <option selected></option>
+                {#each ['#fef08a', '#fed7aa', '#fecaca', '#fbcfe8', '#e9d5ff', '#bfdbfe', '#99f6e4', '#bbf7d0', '#e5e7eb'] as color}
+                    <option value={color}></option>
+                {/each}
+            </select>
         </span>
         <!-- Add subscript and superscript buttons -->
         <span class="ql-formats">
@@ -560,8 +597,6 @@
         <span 
         class="ql-formats">
             <!-- <button class="ql-code-block" title="Clean button" value="super"></button> -->
-            <!-- <button class="ql-color" title="Clean button" value="super"></button>
-            <button class="ql-background" title="Clean button" value="super"></button> -->
             <!-- the table controls aren't Quill toolbar formats: mousedown is cancelled so the editor keeps focus -->
             <button type="button" class="table-insert" title={in_table ? "Tables can't be put inside tables" : 'Insert table'}
                 aria-label="Insert table" disabled={in_table}

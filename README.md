@@ -43,7 +43,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - **Live cursors:** everyone sees each other's cursor and selection in that person's colour, with their name. Cursors stay on the right spot while anyone types, because each one is mapped through the same OT revisions as the text.
 
 **Editing**
-- Rich text: bold, italic, underline, strikethrough, superscript and subscript, alignment, lists, links.
+- Rich text: bold, italic, underline, strikethrough, superscript and subscript, text and highlight colours, alignment, lists, links.
 - One-click text styles: *Title* (largest, bold, centred, one per document), *Heading* (bold, centred, for sections), *Subtitle* (bold italic), *Text* and *Tiny*. Pressing Enter after a heading switches back to Text.
 - An **outline pane** lists every Title, Heading and Subtitle as three levels, jumps to a section on click and highlights the section the cursor is in.
 - **Page breaks:** a toolbar button (or Ctrl+Enter) starts a new page, shown as a gap between pages. Downloads to Word keep them as real page breaks.

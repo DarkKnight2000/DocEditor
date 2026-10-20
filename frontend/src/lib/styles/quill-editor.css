@@ -199,8 +199,23 @@
 
 /* --- links and the link tooltip --------------------------------------------- */
 
+/* Links are blue and underlined. The colour is Tailwind's blue-700 written out: a Tailwind colour variable
+   only exists in the page when some class uses it, and nothing else uses blue-700, so @apply text-blue-700
+   left links black. */
 .ql-snow .ql-editor a {
-    @apply text-blue-700;
+    color: #1d4ed8;
+    text-decoration: underline;
+}
+
+/* while Ctrl/Cmd is held, Ctrl+click opens a link (Editor.svelte): show that with the hand pointer */
+.links-openable .ql-editor a {
+    cursor: pointer;
+}
+
+/* ...unless the writer gave the link a text colour: Quill puts it on an element around the link, as
+   style="color: …" (matched exactly, so a highlight's background-color doesn't count) */
+.ql-snow .ql-editor :is([style^="color:"], [style*=" color:"]) a {
+    color: inherit;
 }
 
 .ql-snow .ql-tooltip {

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import JSZip from 'jszip';
 import { Packer } from 'docx';
-import { deltaToLines, buildDocx, docxFileName } from './export_docx.js';
+import { deltaToLines, buildDocx, docxFileName, wordColor } from './export_docx.js';
 
 const title = (t) => ({ insert: t, attributes: { size: 'huge', bold: true } });
 const subtitle = (t) => ({ insert: t, attributes: { size: 'large', bold: true, italic: true } });
@@ -168,6 +168,26 @@ test('cells keep their formatting, and a short row is padded to the full width',
 test('two tables separated by text stay two tables', async () => {
     const xml = await documentXml([...tableOps([['a', 'b']]), { insert: 'between\n' }, ...tableOps([['c', 'd']])]);
     assert.equal((xml.match(/<w:tbl>/g) ?? []).length, 2);
+});
+
+test('text and highlight colours become Word colours and shading', async () => {
+    const xml = await documentXml([
+        { insert: 'red', attributes: { color: '#dc2626' } },
+        { insert: ' and ' },
+        { insert: 'highlighted', attributes: { background: '#fef08a' } },
+        { insert: '\n' },
+    ]);
+    assert.match(xml, /<w:color w:val="DC2626"\/>/);
+    assert.match(xml, /<w:shd [^>]*w:fill="FEF08A"/);
+});
+
+test('wordColor accepts the colour forms Quill stores and drops the rest', () => {
+    assert.equal(wordColor('#dc2626'), 'DC2626');
+    assert.equal(wordColor('#F0a'), 'FF00AA');
+    assert.equal(wordColor('rgb(255, 0, 128)'), 'FF0080');
+    assert.equal(wordColor('red'), undefined);
+    assert.equal(wordColor('#12345'), undefined);
+    assert.equal(wordColor(undefined), undefined);
 });
 
 test('file names drop characters file systems reject', () => {
