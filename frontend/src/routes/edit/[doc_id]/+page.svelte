@@ -8,6 +8,8 @@
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
     import SavedIcon from '@iconify-svelte/material-symbols/cloud-done-outline-rounded';
     import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
+    import StatsIcon from '@iconify-svelte/material-symbols/bar-chart-rounded';
+    import StatsDialog from '$lib/StatsDialog.svelte';
     import SavingIcon from '@iconify-svelte/material-symbols/sync-rounded';
     import OfflineIcon from '@iconify-svelte/material-symbols/cloud-off-outline-rounded';
 
@@ -50,6 +52,9 @@
             downloading = false;
         }
     }
+    /** @type {any} the Stats dialog: word and character counts of the document */
+    let stats_dialog;
+
     // how the status is shown: problems in red, saved with a cloud tick, everything else in progress
     let status_kind = $derived(
         ['Offline', "Can't connect", 'Error saving', 'Document is full, reloading…', 'Out of sync, reloading…'].includes(sync_status) ? 'problem'
@@ -239,6 +244,10 @@
         <PresenceAvatars users={others} />
 
         {#if !data.hidden}
+            <button onclick={() => editor && stats_dialog.open(editor.get_contents())} aria-label="Word and character count" title="Word and character count"
+                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
+                <StatsIcon class="w-5 h-5" aria-hidden="true" />
+            </button>
             <button onclick={download_docx} disabled={downloading} aria-label="Download as Word document" title="Download as Word (.docx)"
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-wait">
                 <DownloadIcon class="w-5 h-5" aria-hidden="true" />
@@ -315,6 +324,9 @@
         </div>
     </div>
 </dialog>
+
+
+<StatsDialog bind:this={stats_dialog} title={tab_title} />
 
 
 <!-- No permission dialog -->

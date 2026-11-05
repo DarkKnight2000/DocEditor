@@ -10,6 +10,8 @@
     import DocIcon from '@iconify-svelte/material-symbols/description-outline-rounded';
     import SaveIcon from '@iconify-svelte/material-symbols/save-outline-rounded';
     import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
+    import StatsIcon from '@iconify-svelte/material-symbols/bar-chart-rounded';
+    import StatsDialog from '$lib/StatsDialog.svelte';
     import SavedIcon from '@iconify-svelte/material-symbols/check-circle-outline-rounded';
     import EditedIcon from '@iconify-svelte/material-symbols/edit-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
@@ -195,6 +197,8 @@
 
     /** @type {HTMLDialogElement} */
     let unsaved_dialog;
+    /** @type {any} the Stats dialog: word and character counts of the document */
+    let stats_dialog;
     /** @type {((choice: 'save' | 'discard' | 'cancel') => void) | null} */
     let unsaved_answer = null;
 
@@ -466,6 +470,10 @@
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50">
                 <FolderOpenIcon class="w-5 h-5" aria-hidden="true" />
             </button>
+            <button onclick={() => stats_dialog.open(editor.get_contents())} aria-label="Word and character count" title="Word and character count"
+                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
+                <StatsIcon class="w-5 h-5" aria-hidden="true" />
+            </button>
             <button onclick={export_docx} disabled={busy} aria-label="Export as Word document" title="Export as Word (.docx)"
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50">
                 <DownloadIcon class="w-5 h-5" aria-hidden="true" />
@@ -546,6 +554,8 @@
         </button>
     </div>
 {/if}
+
+<StatsDialog bind:this={stats_dialog} title={doc?.name ?? ''} />
 
 <!-- Unsaved changes: Escape or clicking away is the same as Cancel -->
 <dialog class="m-auto rounded-2xl w-[min(26rem,calc(100vw-2rem))]" bind:this={unsaved_dialog}
