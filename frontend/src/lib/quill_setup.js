@@ -1,6 +1,6 @@
 import Quill, { Delta } from 'quill';
 import { insertPageBreak, removePageBreakAt, withPastedPageBreaks } from './page_break.js';
-import { inTable, cellAsOneLine, withNewRowId } from './table.js';
+import { inTable, cellAsOneLine, withNewRowId, asCellText, tableEndFix } from './table.js';
 import { styleOfFormat, applyStyleToOps } from './text_styles.js';
 import { dropDisallowedValues, withScheme } from './format_rules.js';
 
@@ -213,6 +213,36 @@ export function createQuill(container, { toolbar, placeholder = 'Start typing...
     // Quill updates the page before it reports a change, so spacing the headings right away means the
     // screen never shows the old spacing on the new lines (e.g. after Enter shifts every line's position)
     quill.on('text-change', space_headings);
+
+    // Content pasted into a table cell becomes text for that one cell (table.js, asCellText). Quill passes
+    // the formats where the paste goes, so a cell shows as formats.table.
+    const convert = quill.clipboard.convert.bind(quill.clipboard);
+    quill.clipboard.convert = (/** @type {any} */ input, /** @type {Record<string, any>} */ formats = {}) => {
+        const delta = convert(input, formats);
+        return formats.table ? asCellText(delta) : delta;
+    };
+
+    // The document never ends inside a table (table.js, tableEndFix). The fix is made just after the
+    // change that caused it, once everyone listening has seen that change, so the sync gets the two in
+    // order; Quill's undo history merges it with that change. Undo and redo are left alone: they only go
+    // back to states the fix already allowed, and fixing them again would stop undo going further back.
+    let in_history = false;
+    for(const name of /** @type {const} */ (['undo', 'redo']))
+    {
+        const history = /** @type {any} */ (quill).history;
+        const original = history[name].bind(history);
+        history[name] = () => {
+            in_history = true;
+            try { original(); } finally { in_history = false; }
+        };
+    }
+    quill.on('text-change', (/** @type {any} */ _delta, /** @type {any} */ _old, /** @type {string} */ source) => {
+        if(source !== 'user' || in_history) return;
+        queueMicrotask(() => {
+            const fix = tableEndFix(quill);
+            if(fix) quill.updateContents(fix, 'user');
+        });
+    });
 
     return {
         quill,

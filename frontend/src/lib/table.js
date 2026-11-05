@@ -79,6 +79,49 @@ export function cellAsOneLine(delta)
     return out.insert('\n');
 }
 
+// formats of a whole line, which pasted text going into a cell mustn't bring (a pasted table's text carries
+// its own row id, which would move the cell to another row)
+const LINE_FORMATS = ['table', 'align', 'list', 'indent'];
+
+/**
+ * Content pasted into a table cell, as text for that cell. A cell holds one line, and Quill would turn
+ * each pasted line into a cell of its own (adding columns, or splitting the table), so everything pasted
+ * becomes one line (cellAsOneLine). The cell keeps its own line end, so the pasted text has none.
+ * @param {Delta} delta the pasted content, as Quill converted it
+ */
+export function asCellText(delta)
+{
+    const line = cellAsOneLine(delta);
+    return new Delta(line.slice(0, line.length() - 1).ops.map((op) => {
+        if(!op.attributes) return op;
+        const attributes = Object.fromEntries(Object.entries(op.attributes).filter(([name]) => !LINE_FORMATS.includes(name)));
+        return Object.keys(attributes).length ? { ...op, attributes } : { insert: op.insert };
+    }));
+}
+
+/**
+ * The change that keeps the document from ending inside a table, or null when it doesn't. A table at the
+ * very end leaves no line below it to write on, and it happens after deleting from a table to the end of
+ * the document (the line left over keeps the table's format, as one empty cell) or pasting a table last.
+ * - one empty cell left on its own in its row: it becomes an ordinary empty line
+ * - a real table: an empty line goes after it
+ * @param {any} quill
+ */
+export function tableEndFix(quill)
+{
+    const length = quill.getLength();
+    // the document's final newline, and the character before it (the end of the line before, if the last
+    // line is empty)
+    const last = quill.getContents(length - 1, 1).ops[0];
+    const row = last?.attributes?.table;
+    if(!row) return null;
+    const before = length >= 2 ? quill.getContents(length - 2, 1).ops[0] : null;
+    const lastLineEmpty = !before || typeof before.insert !== 'string' || before.insert.endsWith('\n');
+    const onlyCellInRow = !before || before.attributes?.table !== row;
+    if(lastLineEmpty && onlyCellInRow) return new Delta().retain(length - 1).retain(1, { table: null });
+    return new Delta().retain(length - 1).insert('\n', { table: row }).retain(1, { table: null });
+}
+
 /**
  * A pasted table row with a row id of its own. Quill numbers the rows of a pasted table 1, 2, 3..., and
  * neighbouring cells with the same id form one row, so a pasted table next to another pasted table (or
