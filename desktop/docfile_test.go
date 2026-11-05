@@ -184,3 +184,15 @@ func TestFilesWithoutAnAutosaveSettingOpenWithItOff(t *testing.T) {
 		t.Errorf("got %+v, %v", doc, err)
 	}
 }
+
+func TestExportRefusesUnknownFormatsBeforeAskingWhereToSave(t *testing.T) {
+	// an unknown format fails before the save dialog, which needs a running app
+	if _, err := (&App{}).ExportFile("Notes", "pdf", ""); err == nil || !strings.Contains(err.Error(), "unknown export format") {
+		t.Fatalf("expected an unknown format error, got %v", err)
+	}
+	for _, format := range []string{"docx", "epub"} {
+		if f, ok := exportFormats[format]; !ok || f.ext != "."+format {
+			t.Fatalf("%s: got %+v", format, f)
+		}
+	}
+}

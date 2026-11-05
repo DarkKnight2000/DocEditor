@@ -138,22 +138,33 @@ func (a *App) SaveAs(name string, ops json.RawMessage, autosave bool) (*Document
 	return &Document{Path: path, Name: docName(path), Autosave: autosave}, nil
 }
 
-// ExportDocx asks where to save a Word file made by the frontend (export_docx.js), sent as base64.
+// exportFormats are the files the frontend can export (export_docx.js, export_epub.js), by format name.
+// PDF isn't one: the frontend prints it, and the print dialog saves it.
+var exportFormats = map[string]struct{ ext, title, filter string }{
+	"docx": {".docx", "Export as Word document", "Word documents (*.docx)"},
+	"epub": {".epub", "Export as EPUB", "EPUB e-books (*.epub)"},
+}
+
+// ExportFile asks where to save a file the frontend made in one of exportFormats, sent as base64.
 // It returns the path saved to, or "" when the person cancels.
-func (a *App) ExportDocx(name string, docxBase64 string) (string, error) {
-	data, err := base64.StdEncoding.DecodeString(docxBase64)
+func (a *App) ExportFile(name string, format string, dataBase64 string) (string, error) {
+	f, ok := exportFormats[format]
+	if !ok {
+		return "", errors.New("unknown export format: " + format)
+	}
+	data, err := base64.StdEncoding.DecodeString(dataBase64)
 	if err != nil {
-		return "", errors.New("the Word file could not be created")
+		return "", errors.New("the file could not be created")
 	}
 	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
-		Title:           "Export as Word document",
-		DefaultFilename: safeFileName(name, "Untitled") + ".docx",
-		Filters:         []runtime.FileFilter{{DisplayName: "Word documents (*.docx)", Pattern: "*.docx"}},
+		Title:           f.title,
+		DefaultFilename: safeFileName(name, "Untitled") + f.ext,
+		Filters:         []runtime.FileFilter{{DisplayName: f.filter, Pattern: "*" + f.ext}},
 	})
 	if err != nil || path == "" {
 		return "", err
 	}
-	path = withExt(path, ".docx")
+	path = withExt(path, f.ext)
 	return path, writeFileAtomic(path, data)
 }
 

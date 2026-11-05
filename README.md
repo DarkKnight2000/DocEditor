@@ -48,7 +48,7 @@ copy: see [SELF_HOSTING.md](SELF_HOSTING.md).
 - An **outline pane** lists every Title, Heading and Subtitle as three levels, jumps to a section on click and highlights the section the cursor is in.
 - **Page breaks:** a toolbar button (or Ctrl+Enter) starts a new page, shown as a gap between pages. Downloads to Word keep them as real page breaks.
 - **Tables:** insert a table from the toolbar, move between cells with Tab, and add or delete rows and columns from the Table menu. Tables sync like any other text, and download to Word as real tables.
-- **Download as Word (.docx)**, built in the browser. Title becomes Word's Title, and Headings and Subtitles become Word headings, so Word's navigation pane shows the same sections, and lists, links and formatting carry over. The converter only loads when it's first used.
+- **Download as Word (.docx), PDF or EPUB**, all built in the browser. In Word, Title becomes Word's Title and Headings and Subtitles become Word headings, so Word's navigation pane shows the same sections, and lists, links and formatting carry over. PDF goes through the print dialog ("Save as PDF"), so it looks like the editor in any language. EPUB starts a chapter at each Title and Heading, with Subtitles in the e-reader's table of contents. Each converter only loads when it's first used.
 
 **Sharing and accounts**
 - Google Sign-In; Raya never sees a password.
@@ -161,6 +161,7 @@ backend and frontend. They run with `make test`.
 | `frontend/src/lib/sync_client.test.js` | The browser's sync state machine, including randomized sessions where every client's screen must match the server; mapping cursors between revisions and unsent edits |
 | `frontend/src/lib/text_styles.test.js`, `outline.test.js` | Text-style detection and the outline/section tracking |
 | `frontend/src/lib/export_docx.test.js` | Word export: generates real `.docx` files and checks the Word XML for headings, formats, links (only web links kept) and list numbering |
+| `frontend/src/lib/export_html.test.js`, `export_epub.test.js` | PDF and EPUB exports: the HTML for styles, formats, lists, tables and escaping; real `.epub` files checked for the uncompressed mimetype, chapters, table of contents and package |
 
 The sync logic in the browser has no Quill or DOM code, so Node can test it directly.
 

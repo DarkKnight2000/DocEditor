@@ -3,7 +3,7 @@
 import {main} from '../models';
 import {jsontext} from '../models';
 
-export function ExportDocx(arg1:string,arg2:string):Promise<string>;
+export function ExportFile(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function ForgetRecent(arg1:string):Promise<void>;
 

@@ -2,14 +2,14 @@
     import { onMount } from 'svelte';
     import DesktopEditor from './DesktopEditor.svelte';
     import logo from '$web_static/favicon.svg';
-    import { StartupFile, SetDirty, Quit, OpenDialog, Open, Save, SaveAs, ExportDocx, RecentFiles, ForgetRecent, ShowInFolder, ShowDocumentWindow, ShowHomeWindow } from '../wailsjs/go/main/App.js';
+    import { StartupFile, SetDirty, Quit, OpenDialog, Open, Save, SaveAs, ExportFile, RecentFiles, ForgetRecent, ShowInFolder, ShowDocumentWindow, ShowHomeWindow } from '../wailsjs/go/main/App.js';
     import { EventsOn, WindowSetTitle } from '../wailsjs/runtime/runtime.js';
 
     import AddIcon from '@iconify-svelte/material-symbols/add-rounded';
     import FolderOpenIcon from '@iconify-svelte/material-symbols/folder-open-outline-rounded';
     import DocIcon from '@iconify-svelte/material-symbols/description-outline-rounded';
     import SaveIcon from '@iconify-svelte/material-symbols/save-outline-rounded';
-    import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
+    import ExportMenu from '$lib/ExportMenu.svelte';
     import StatsIcon from '@iconify-svelte/material-symbols/bar-chart-rounded';
     import StatsDialog from '$lib/StatsDialog.svelte';
     import SettingsIcon from '@iconify-svelte/material-symbols/settings-outline-rounded';
@@ -334,21 +334,32 @@
         }
     }
 
-    // Word file of the document as it is on screen; the converter loads only when first used
-    async function export_docx()
+    // Exports the document as it is on screen; each converter loads only when first used. Word and EPUB
+    // files are saved where the person picks; PDF opens the print dialog, which saves it.
+    async function export_as(/** @type {'docx' | 'pdf' | 'epub'} */ format)
     {
         if(!doc || !editor || busy) return;
+        const name = doc.name;
+        const ops = editor.get_contents();
+        if(format === 'pdf')
+        {
+            const { printDocument } = await import('$lib/export_pdf.js');
+            printDocument(ops, name);
+            editor?.focus();
+            return;
+        }
         busy = true;
         try
         {
-            const { docxBlob } = await import('$lib/export_docx.js');
-            const blob = await docxBlob(editor.get_contents(), doc.name);
-            await ExportDocx(doc.name, await blob_base64(blob));
+            const blob = format === 'docx'
+                ? await import('$lib/export_docx.js').then((m) => m.docxBlob(ops, name))
+                : await import('$lib/export_epub.js').then((m) => m.epubBlob(ops, name, navigator.language));
+            await ExportFile(name, format, await blob_base64(blob));
         }
         catch(ex)
         {
             console.error('Export failed:', ex);
-            show_error('Could not create the Word file.');
+            show_error(`Could not create the ${format === 'docx' ? 'Word' : 'EPUB'} file.`);
         }
         finally
         {
@@ -484,10 +495,7 @@
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
                 <StatsIcon class="w-5 h-5" aria-hidden="true" />
             </button>
-            <button onclick={export_docx} disabled={busy} aria-label="Export as Word document" title="Export as Word (.docx)"
-                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50">
-                <DownloadIcon class="w-5 h-5" aria-hidden="true" />
-            </button>
+            <ExportMenu onpick={export_as} disabled={busy} label="Export as Word, PDF or EPUB" />
             <button onclick={save} disabled={busy} title="Save (Ctrl+S) · Save as (Ctrl+Shift+S)"
                 class="flex items-center gap-1.5 font-bold py-2 px-3 sm:pl-3 sm:pr-4 bg-yellow-300 hover:bg-yellow-400 text-gray-900 rounded-xl cursor-pointer shrink-0 disabled:opacity-60">
                 <SaveIcon class="w-5 h-5" aria-hidden="true" />

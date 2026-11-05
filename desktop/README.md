@@ -2,7 +2,7 @@
 
 Raya as a desktop app for documents on your own computer. It works fully offline: there are no
 accounts, no server and no syncing. Each document is a `.raya` file you open and save, and you can
-export any document to Word.
+export any document to Word, PDF or EPUB.
 
 It is built with [Wails](https://wails.io) v2. A Go backend handles files and native dialogs, and a
 Svelte frontend runs in the system webview (WebView2 on Windows).
@@ -15,7 +15,7 @@ Tailwind configs, and its own dependencies. The only thing it shares is the edit
 
 - `quill_setup.js`: Raya's Quill editor, with its formats, shortcuts, paste rules and heading spacing
 - `text_styles.js`, `table.js`, `page_break.js`, `outline.js`, `format_rules.js`: editor features
-- `export_docx.js`: Word export
+- `document_lines.js`, `export_docx.js`, `export_html.js`, `export_pdf.js`, `export_epub.js`: Word, PDF and EPUB export
 - `styles/quill-editor.css`: the editor's look
 
 None of the web app's server, sync or sign-in code is used. The shared files get their packages

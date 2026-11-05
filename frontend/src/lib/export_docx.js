@@ -8,59 +8,13 @@
 // and tables Word tables.
 import { AlignmentType, Document, ExternalHyperlink, HeadingLevel, LevelFormat, Packer, PageBreak, Paragraph, ShadingType, Table, TableCell,
     TableRow, TextRun, WidthType } from 'docx';
-import { styleOfFormat } from './text_styles.js';
-import { withScheme } from './format_rules.js';
+import { deltaToLines, linesToBlocks, safeLink, exportFileName } from './document_lines.js';
 
-/**
- * @typedef {{ text: string, attributes: Record<string, any> }} Run
- * @typedef {{ runs: Run[], attributes: Record<string, any>, style: string, pageBreak?: boolean }} Line
- *   attributes: the line's formats (align, list, indent), from the newline that ends it
- *   style: 'title' | 'subtitle' | 'text' | 'tiny', from the size of the line's first character
- *   pageBreak: a manual page break (page_break.js) instead of text
- */
+/** @typedef {import('./document_lines.js').Line} Line */
+/** @typedef {import('./document_lines.js').Run} Run */
 
-/**
- * Splits a document into lines of formatted text runs.
- * @param {Array<{insert?: any, attributes?: Record<string, any>}>} ops document contents (quill.getContents().ops)
- * @returns {Line[]}
- */
-export function deltaToLines(ops)
-{
-    /** @type {Line[]} */
-    const lines = [];
-    /** @type {Run[]} */
-    let runs = [];
-
-    for(const op of ops)
-    {
-        if(typeof op.insert !== 'string')
-        {
-            // a page break is a line of its own; other embeds (pasted images and the like) aren't
-            // supported by Raya, so they're left out
-            if(op.insert?.pagebreak)
-            {
-                if(runs.length) lines.push({ runs, attributes: {}, style: 'text' });
-                runs = [];
-                lines.push({ runs: [], attributes: {}, style: 'text', pageBreak: true });
-            }
-            continue;
-        }
-        const parts = op.insert.split('\n');
-        parts.forEach((part, i) => {
-            if(part) runs.push({ text: part, attributes: op.attributes ?? {} });
-            if(i < parts.length - 1)
-            {
-                // the newline ends the line and carries its line formats
-                const size = runs[0]?.attributes.size;
-                lines.push({ runs, attributes: op.attributes ?? {}, style: styleOfFormat({ size }) || 'text' });
-                runs = [];
-            }
-        });
-    }
-    // Quill documents end with a newline; text after the last one (if any) is still a line
-    if(runs.length) lines.push({ runs, attributes: {}, style: 'text' });
-    return lines;
-}
+// the line splitting is shared with the PDF and EPUB exports; re-exported for the existing tests
+export { deltaToLines };
 
 // Word sizes are in half-points. Body text is 12pt; the others keep the editor's proportions
 // (quill-editor.css: Title 2em, Subtitle 1.35em, Tiny 0.85em).
@@ -113,18 +67,6 @@ export function wordColor(value)
     m = v.match(/^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/);
     if(m) return m.slice(1, 4).map((n) => Math.min(255, Number(n)).toString(16).padStart(2, '0')).join('').toUpperCase();
     return undefined;
-}
-
-/**
- * Only http(s) and mailto links are kept as links; anything else becomes plain text. A link saved without
- * its scheme ("example.com") gets one.
- * @param {any} link
- */
-function safeLink(link)
-{
-    if(typeof link !== 'string') return null;
-    link = withScheme(link);
-    return /^(https?:|mailto:)/i.test(link) ? link : null;
 }
 
 /**
@@ -189,26 +131,11 @@ export function buildDocx(ops, title)
     };
 
     /** @type {(Paragraph | Table)[]} */
-    const blocks = [];
-    for(let i = 0; i < lines.length;)
-    {
-        if(!lines[i].attributes.table)
-        {
-            blocks.push(paragraphOf(lines[i++]));
-            continue;
-        }
-        /** @type {Line[][]} */
-        const rows = [];
-        while(i < lines.length && lines[i].attributes.table)
-        {
-            const id = lines[i].attributes.table;
-            const row = [];
-            while(i < lines.length && lines[i].attributes.table === id) row.push(lines[i++]);
-            rows.push(row);
-        }
+    const blocks = linesToBlocks(lines).map((block) => {
+        if(block.type === 'line') return paragraphOf(block.line);
         inNumberedList = false;
-        blocks.push(tableOf(rows));
-    }
+        return tableOf(block.rows);
+    });
 
     return new Document({
         title: title || 'Untitled',
@@ -265,6 +192,5 @@ export function docxBlob(ops, title)
  */
 export function docxFileName(name)
 {
-    const clean = (name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
-    return `${clean || 'Untitled'}.docx`;
+    return exportFileName(name, 'docx');
 }

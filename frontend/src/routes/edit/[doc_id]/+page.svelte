@@ -7,7 +7,7 @@
     import ShareIcon from '@iconify-svelte/material-symbols/group-add-outline-rounded';
     import CloseIcon from '@iconify-svelte/material-symbols/close-rounded';
     import SavedIcon from '@iconify-svelte/material-symbols/cloud-done-outline-rounded';
-    import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
+    import ExportMenu from '$lib/ExportMenu.svelte';
     import StatsIcon from '@iconify-svelte/material-symbols/bar-chart-rounded';
     import StatsDialog from '$lib/StatsDialog.svelte';
     import SettingsIcon from '@iconify-svelte/material-symbols/settings-outline-rounded';
@@ -27,27 +27,35 @@
     let editor;
     let downloading = $state(false);
 
-    // Word file of the document as it is on screen; the converter loads only when first used
-    async function download_docx()
+    // Exports the document as it is on screen; each converter loads only when first used.
+    // Word and EPUB download as files; PDF opens the print dialog, where it's saved as a PDF.
+    async function export_as(/** @type {'docx' | 'pdf' | 'epub'} */ format)
     {
         if(downloading || !editor) return;
         downloading = true;
+        const name = (shown_doc_name ?? '').replace(/\s+/g, ' ').trim();
         try
         {
-            const { docxBlob, docxFileName } = await import('$lib/export_docx.js');
-            const name = (shown_doc_name ?? '').replace(/\s+/g, ' ').trim();
-            const blob = await docxBlob(editor.get_contents(), name);
+            if(format === 'pdf')
+            {
+                const { printDocument } = await import('$lib/export_pdf.js');
+                printDocument(editor.get_contents(), name);
+                return;
+            }
+            const { blob, file_name } = format === 'docx'
+                ? await import('$lib/export_docx.js').then(async (m) => ({ blob: await m.docxBlob(editor.get_contents(), name), file_name: m.docxFileName(name) }))
+                : await import('$lib/export_epub.js').then(async (m) => ({ blob: await m.epubBlob(editor.get_contents(), name, navigator.language), file_name: m.epubFileName(name) }));
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = docxFileName(name);
+            link.download = file_name;
             link.click();
             setTimeout(() => URL.revokeObjectURL(url), 10000);
         }
         catch(ex)
         {
-            console.error('Download failed:', ex);
-            alert('Could not create the Word file. Please try again.');
+            console.error('Export failed:', ex);
+            alert(`Could not create the ${format === 'docx' ? 'Word' : format.toUpperCase()} file. Please try again.`);
         }
         finally
         {
@@ -258,10 +266,7 @@
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
                 <StatsIcon class="w-5 h-5" aria-hidden="true" />
             </button>
-            <button onclick={download_docx} disabled={downloading} aria-label="Download as Word document" title="Download as Word (.docx)"
-                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0 disabled:opacity-50 disabled:cursor-wait">
-                <DownloadIcon class="w-5 h-5" aria-hidden="true" />
-            </button>
+            <ExportMenu onpick={export_as} disabled={downloading} label="Download as Word, PDF or EPUB" />
         {/if}
 
         <button onclick={display_collabs} aria-label="Share" title="Share"

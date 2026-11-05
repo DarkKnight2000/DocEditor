@@ -2,6 +2,7 @@
 /* shared components from the web app's source, which Tailwind doesn't scan by itself */
 @source '../../../frontend/src/lib/StatsDialog.svelte';
 @source '../../../frontend/src/lib/ViewSettingsDialog.svelte';
+@source '../../../frontend/src/lib/ExportMenu.svelte';
 
 /* the bundled variable font (@fontsource-variable/nunito), the same face the web app loads from Google Fonts */
 @theme {
