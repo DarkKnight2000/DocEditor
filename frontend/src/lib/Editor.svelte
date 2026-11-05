@@ -65,6 +65,15 @@
     {
         return quill_instance?.getContents().ops ?? [];
     }
+    /**
+     * The selected part of the document as Quill ops, or null when nothing is selected (call through bind:this)
+     * @returns {any[] | null}
+     */
+    export function get_selection_contents()
+    {
+        const range = quill_instance?.getSelection();
+        return quill_instance && range?.length ? quill_instance.getContents(range.index, range.length).ops : null;
+    }
     // style of the line(s) at the cursor, shown in the style dropdown ('' when mixed)
     let current_style = $state('text');
     // whether the cursor is in a table (shows the Table menu), and where the cursor last was: the menu

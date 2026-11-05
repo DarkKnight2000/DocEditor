@@ -244,7 +244,9 @@
         <PresenceAvatars users={others} />
 
         {#if !data.hidden}
-            <button onclick={() => editor && stats_dialog.open(editor.get_contents())} aria-label="Word and character count" title="Word and character count"
+            <!-- the editor keeps the focus when this is clicked, so the selection is still there to count -->
+            <button onmousedown={(e) => e.preventDefault()} onclick={() => editor && stats_dialog.open(editor.get_contents(), editor.get_selection_contents())}
+                aria-label="Word and character count" title="Word and character count"
                 class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
                 <StatsIcon class="w-5 h-5" aria-hidden="true" />
             </button>
