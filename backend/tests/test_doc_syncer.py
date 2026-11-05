@@ -10,6 +10,9 @@ import app.doc_syncer as doc_syncer
 from app.doc_syncer import DocSyncer, MessageType, text_length
 from tests.fakes import FakeDB, FakeSocket, SimClient, normalize, random_edit, text_of
 
+# the newline Quill always keeps at the end of a document
+NL = '\n'
+
 INIT, ACK, REV, DROP, LIMIT, PRESENCE = (MessageType.SERVER_INIT.value, MessageType.SERVER_ACK.value,
                                          MessageType.SERVER_REV.value, MessageType.SERVER_DROP_ACCESS.value,
                                          MessageType.SERVER_DOC_LIMIT.value, MessageType.SERVER_PRESENCE.value)
@@ -37,7 +40,8 @@ def test_connect_sends_document_and_registers_client(db):
     async def scenario():
         syncer = DocSyncer('doc')
         sock = await join(syncer, 'c1')
-        assert sock.sent == [{'type': INIT, 'rev': 4, 'content': [{'insert': 'hello'}],
+        # sent with the newline Quill keeps at the end, which the stored document lacks
+        assert sock.sent == [{'type': INIT, 'rev': 4, 'content': [{'insert': 'hello'}, {'insert': NL}],
                               'max_chars': doc_syncer.MAX_DOC_CHARS},
                              {'type': PRESENCE, 'users': []}]
         assert db.docs['doc']['clients'] == {'c1': 4}
@@ -66,7 +70,7 @@ def test_revision_numbers_follow_the_head(db):
         assert [m['rev'] for m in a.of_type(ACK)] == [1, 2]
         assert [m['rev'] for m in b.of_type(REV)] == [1, 2]
         assert db.docs['doc']['head']['rev_id'] == 2
-        assert db.text() == '21xy'
+        assert db.text() == '21xy' + NL
     run(scenario())
 
 
@@ -79,7 +83,7 @@ def test_concurrent_edit_is_transformed_against_revisions_the_client_missed(db):
         await syncer.add_revision(None, 'a', [{'insert': 'aaa'}], 0)                 # rev 1
         # b appends at the end of "xy" without having seen rev 1
         await syncer.add_revision(None, 'b', [{'retain': 2}, {'insert': 'B'}], 0)    # rev 2
-        assert db.text() == 'aaaxyB'
+        assert db.text() == 'aaaxyB' + NL
         assert b.of_type(ACK) == [{'type': ACK, 'rev': 2}]
         # a receives b's change shifted past the 3 characters a inserted
         assert json.loads(a.of_type(REV)[-1]['content']) == [{'retain': 5}, {'insert': 'B'}]
@@ -201,6 +205,29 @@ def test_unsupported_formats_are_dropped_and_images_refused_when_editing(db):
     run(scenario())
 
 
+def test_new_empty_document_is_sent_with_quills_final_newline(db):
+    db.add_doc(text='', rev=0)
+
+    async def scenario():
+        sock = await join(DocSyncer('doc'), 'a')
+        assert sock.of_type(INIT)[0]['content'] == [{'insert': NL}]
+    run(scenario())
+
+
+def test_editing_the_last_line_of_a_document_saved_without_final_newline(db):
+    # documents used to be saved without the newline Quill keeps at the end; a change that formats the
+    # last line reaches that newline, and must still fit instead of being refused as a mismatch
+    db.add_doc(text='hello', rev=0)
+
+    async def scenario():
+        syncer = DocSyncer('doc')
+        a = await join(syncer, 'a')
+        await syncer.add_revision(None, 'a', [{'retain': 5}, {'retain': 1, 'attributes': {'align': 'center'}}], 0)
+        assert a.of_type(MessageType.SERVER_RESYNC.value) == []
+        assert db.docs['doc']['head']['delta'] == [{'insert': 'hello'}, {'insert': NL, 'attributes': {'align': 'center'}}]
+    run(scenario())
+
+
 def test_edit_based_on_unknown_revision_is_rejected(db):
     db.add_doc(text='xy', rev=3)
 
@@ -235,7 +262,7 @@ def test_retry_after_write_conflict_transforms_the_change_only_once(db):
         db.conflicts_to_inject = 2                  # the next two writes lose a race
         await syncer.add_revision(None, 'b', [{'retain': 2}, {'insert': 'B'}], 0)
         # regression: retries used to re-transform the already transformed change
-        assert db.text() == 'aaaxyB'
+        assert db.text() == 'aaaxyB' + NL
     run(scenario())
 
 
@@ -531,7 +558,8 @@ def test_random_concurrent_editing_converges(db, seed):
             client, sock, read = rand.choice(clients)
             r = rand.random()
             if r < 0.45:
-                client.local_change(random_edit(rand, D.length(client.screen), client.client_id))
+                # like Quill, edits never touch the newline at the end of the document
+                client.local_change(random_edit(rand, D.length(client.screen) - 1, client.client_id))
             elif r < 0.7:
                 await send(client)
             elif read[0] < len(sock.sent):

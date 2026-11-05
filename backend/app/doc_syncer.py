@@ -37,6 +37,15 @@ def text_length(doc) -> int:
     return length
 
 
+def with_final_newline(doc):
+    """The document as Quill shows it, which always ends with a newline. A new document is stored empty
+    ([]), and typing in it never adds that newline, so without this the server's copy is one character
+    shorter than every editor's, and changes to the last line (which reach that newline) wouldn't fit."""
+    if doc and isinstance(doc[-1].get(delta.INSERT), str) and doc[-1][delta.INSERT].endswith('\n'):
+        return doc
+    return [*doc, {delta.INSERT: '\n'}]
+
+
 class DocTooLong(Exception):
     pass
 
@@ -168,7 +177,7 @@ class DocSyncer:
             await websocket.send_json({
                 "type": MessageType.SERVER_INIT.value,
                 "rev": head['rev_id'],
-                "content": head['delta'],
+                "content": with_final_newline(head['delta']),
                 "max_chars": self.max_chars
             })
             await self._send_presence()
@@ -279,15 +288,16 @@ class DocSyncer:
                 # A change can't reach past the end of the document. If it does, the client's copy no
                 # longer matches the server's (it was made against a document we don't have), and
                 # composing it would leave a retain in the stored document. Refuse it instead.
-                if change_base_length(changes) > delta.length(content['head']['delta']):
+                head_doc = with_final_newline(content['head']['delta'])
+                if change_base_length(changes) > delta.length(head_doc):
                     raise DocMismatch()
 
-                new_doc = delta.compose(content['head']['delta'], changes)
+                new_doc = delta.compose(head_doc, changes)
                 # Browsers stop edits past the limit, but concurrent edits can still add up past it.
                 # Only growth is refused, so a document that's already too long can be shortened.
                 if self.max_chars is not None:
                     new_length = text_length(new_doc)
-                    if new_length > self.max_chars and new_length > text_length(content['head']['delta']):
+                    if new_length > self.max_chars and new_length > text_length(head_doc):
                         raise DocTooLong()
 
                 next_rev_id = head_rev + 1

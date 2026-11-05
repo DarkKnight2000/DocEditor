@@ -1,5 +1,5 @@
 import Quill, { Delta } from 'quill';
-import { insertPageBreak, removePageBreakAt } from './page_break.js';
+import { insertPageBreak, removePageBreakAt, withPastedPageBreaks } from './page_break.js';
 import { inTable } from './table.js';
 import { styleOfFormat, applyStyleToOps } from './text_styles.js';
 import { dropDisallowedValues, withScheme } from './format_rules.js';
@@ -133,6 +133,8 @@ export function createQuill(container, { toolbar, placeholder = 'Start typing...
     {
         quill.clipboard.addMatcher(tag, (/** @type {Node} */ _node, /** @type {any} */ delta) => new Delta(applyStyleToOps(delta.ops, style)));
     }
+    // ...page breaks from Word, Google Docs and LibreOffice become Raya's (and plain horizontal lines are dropped)
+    quill.clipboard.addMatcher(Node.ELEMENT_NODE, (/** @type {Node} */ node, /** @type {any} */ delta) => withPastedPageBreaks(node, delta, inTable(quill)));
     // ...and links and colours the server wouldn't keep (a javascript: link, a colour named "red") are dropped
     quill.clipboard.addMatcher(Node.ELEMENT_NODE, (/** @type {Node} */ _node, /** @type {any} */ delta) => new Delta(dropDisallowedValues(delta.ops)));
 
