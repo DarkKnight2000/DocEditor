@@ -16,8 +16,13 @@
     @apply font-nunito;
 }
 
+/* text size, line spacing and character spacing follow the reader's view settings (view_settings.js);
+   the defaults are text-lg with leading-relaxed */
 .ql-editor {
-    @apply text-lg font-nunito leading-relaxed;
+    @apply font-nunito;
+    font-size: calc(1.125rem * var(--raya-text-scale, 1));
+    line-height: var(--raya-line-height, 1.625);
+    letter-spacing: var(--raya-letter-spacing, 0);
     /* page margins, smaller on phones */
     padding: 2rem 1.5rem;
     min-height: calc(100vh - 12rem);

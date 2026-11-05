@@ -205,7 +205,9 @@ export function createQuill(container, { toolbar, placeholder = 'Start typing...
             const [above, below] = HEADING_SPACE[level];
             // at the top of the first page or of a page after a page break it sits flush with the margin
             const page_top = i === 0 || el.previousElementSibling?.classList.contains('page-break');
-            return [`#${container_id} .ql-editor > :nth-child(${i + 1}) { margin-top: ${page_top ? '0' : above}; margin-bottom: ${below}; }`];
+            // the space grows and shrinks with the reader's text size (view_settings.js)
+            const scaled = (/** @type {string} */ space) => `calc(${space} * var(--raya-text-scale, 1))`;
+            return [`#${container_id} .ql-editor > :nth-child(${i + 1}) { margin-top: ${page_top ? '0' : scaled(above)}; margin-bottom: ${scaled(below)}; }`];
         }).join('\n');
         if(heading_style.textContent !== rules) heading_style.textContent = rules;
     }

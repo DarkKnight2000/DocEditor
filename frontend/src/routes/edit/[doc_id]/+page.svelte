@@ -10,6 +10,8 @@
     import DownloadIcon from '@iconify-svelte/material-symbols/download-rounded';
     import StatsIcon from '@iconify-svelte/material-symbols/bar-chart-rounded';
     import StatsDialog from '$lib/StatsDialog.svelte';
+    import SettingsIcon from '@iconify-svelte/material-symbols/settings-outline-rounded';
+    import ViewSettingsDialog from '$lib/ViewSettingsDialog.svelte';
     import SavingIcon from '@iconify-svelte/material-symbols/sync-rounded';
     import OfflineIcon from '@iconify-svelte/material-symbols/cloud-off-outline-rounded';
 
@@ -54,6 +56,8 @@
     }
     /** @type {any} the Stats dialog: word and character counts of the document */
     let stats_dialog;
+    /** @type {any} the view settings: text size, line spacing and character spacing */
+    let settings_dialog;
 
     // how the status is shown: problems in red, saved with a cloud tick, everything else in progress
     let status_kind = $derived(
@@ -244,6 +248,10 @@
         <PresenceAvatars users={others} />
 
         {#if !data.hidden}
+            <button onclick={() => settings_dialog.open()} aria-label="View settings" title="View settings: text size and spacing"
+                class="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 cursor-pointer shrink-0">
+                <SettingsIcon class="w-5 h-5" aria-hidden="true" />
+            </button>
             <!-- the editor keeps the focus when this is clicked, so the selection is still there to count -->
             <button onmousedown={(e) => e.preventDefault()} onclick={() => editor && stats_dialog.open(editor.get_contents(), editor.get_selection_contents())}
                 aria-label="Word and character count" title="Word and character count"
@@ -329,6 +337,7 @@
 
 
 <StatsDialog bind:this={stats_dialog} title={tab_title} />
+<ViewSettingsDialog bind:this={settings_dialog} />
 
 
 <!-- No permission dialog -->

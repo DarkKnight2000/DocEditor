@@ -4,6 +4,7 @@
     // redrawn whenever the cursors change (the editor moves them with every edit) or the page resizes.
     import { onMount } from 'svelte';
     import { userColor } from '$lib/user_colors.js';
+    import { VIEW_SETTINGS_EVENT } from '$lib/view_settings.js';
 
     /** @typedef {{ client: string, user: string, name: string, index: number, length: number, moved: number }} RemoteCursor */
 
@@ -90,7 +91,13 @@
         // text reflows when the page width changes (window size, outline pane, fonts loading)
         const observer = new ResizeObserver(() => layout_tick++);
         observer.observe(quill.root);
-        return () => observer.disconnect();
+        // ...and when the view settings change the text's size or spacing, which may not change its height
+        const relayout = () => layout_tick++;
+        window.addEventListener(VIEW_SETTINGS_EVENT, relayout);
+        return () => {
+            observer.disconnect();
+            window.removeEventListener(VIEW_SETTINGS_EVENT, relayout);
+        };
     });
 </script>
 
