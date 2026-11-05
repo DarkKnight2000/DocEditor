@@ -1,6 +1,6 @@
 import Quill, { Delta } from 'quill';
 import { insertPageBreak, removePageBreakAt, withPastedPageBreaks } from './page_break.js';
-import { inTable } from './table.js';
+import { inTable, cellAsOneLine, withNewRowId } from './table.js';
 import { styleOfFormat, applyStyleToOps } from './text_styles.js';
 import { dropDisallowedValues, withScheme } from './format_rules.js';
 
@@ -133,6 +133,13 @@ export function createQuill(container, { toolbar, placeholder = 'Start typing...
     {
         quill.clipboard.addMatcher(tag, (/** @type {Node} */ _node, /** @type {any} */ delta) => new Delta(applyStyleToOps(delta.ops, style)));
     }
+    // ...each pasted table cell is one line, so lines inside a cell don't become extra columns
+    for(const tag of ['TD', 'TH'])
+    {
+        quill.clipboard.addMatcher(tag, (/** @type {Node} */ _node, /** @type {any} */ delta) => cellAsOneLine(delta));
+    }
+    // ...and each pasted row gets its own row id, so it can't merge with the rows of a table next to it
+    quill.clipboard.addMatcher('TR', (/** @type {Node} */ _node, /** @type {any} */ delta) => withNewRowId(delta));
     // ...page breaks from Word, Google Docs and LibreOffice become Raya's (and plain horizontal lines are dropped)
     quill.clipboard.addMatcher(Node.ELEMENT_NODE, (/** @type {Node} */ node, /** @type {any} */ delta) => withPastedPageBreaks(node, delta, inTable(quill)));
     // ...and links and colours the server wouldn't keep (a javascript: link, a colour named "red") are dropped

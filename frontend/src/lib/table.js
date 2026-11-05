@@ -44,6 +44,53 @@ export function insertTable(quill, rows = 3, cols = 3)
     quill.setSelection(at, 0, 'silent');
 }
 
+/**
+ * A pasted table cell (<td> or <th>) as the one line Raya's cells hold. Quill marks every line of a pasted
+ * row as a cell, so a cell with several lines (paragraphs, line breaks, empty lines) would become several
+ * cells, adding columns. Its lines are joined with a space instead, and empty ones dropped (blank or only
+ * spaces: Word fills empty paragraphs with a non-breaking space). Page breaks are dropped too, since a
+ * cell can't hold one.
+ * @param {Delta} delta what Quill made of the cell
+ */
+export function cellAsOneLine(delta)
+{
+    // the cell's lines, each a list of [text, attributes] pieces
+    /** @type {Array<Array<[string, any]>>} */
+    const lines = [[]];
+    for(const op of delta.ops)
+    {
+        if(typeof op.insert !== 'string') continue;
+        op.insert.split('\n').forEach((text, i) => {
+            if(i > 0) lines.push([]);
+            if(text) lines[lines.length - 1].push([text, op.attributes]);
+        });
+    }
+    const out = new Delta();
+    for(const line of lines)
+    {
+        if(line.every(([text]) => !text.trim())) continue;
+        if(out.length() > 0) out.insert(' ');
+        line.forEach(([text, attributes], i) => {
+            if(i === 0) text = text.trimStart();
+            if(i === line.length - 1) text = text.trimEnd();
+            if(text) out.insert(text, attributes);
+        });
+    }
+    return out.insert('\n');
+}
+
+/**
+ * A pasted table row with a row id of its own. Quill numbers the rows of a pasted table 1, 2, 3..., and
+ * neighbouring cells with the same id form one row, so a pasted table next to another pasted table (or
+ * pasted twice) would merge its rows with that table's.
+ * @param {Delta} delta what Quill made of the <tr>
+ */
+export function withNewRowId(delta)
+{
+    const id = rowId();
+    return new Delta(delta.ops.map((op) => (op.attributes?.table == null ? op : { ...op, attributes: { ...op.attributes, table: id } })));
+}
+
 // the actions of the toolbar's Table menu, as names of Quill's table module methods
 export const TABLE_ACTIONS = [
     { id: 'insertRowAbove', label: 'Add row above' },
